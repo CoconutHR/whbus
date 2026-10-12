@@ -233,3 +233,29 @@
   flex: 1;
   min-width: 0;
 }
+
+/* ---------------------------------------------------------------- 浏览器预览提示 */
+
+/*
+  只在浏览器直开 pnpm dev 时出现。
+  目的：不让每个页面各自抛一堆 "reading 'invoke'" 这种看不懂的错。
+*/
+.browser-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  padding: var(--space-2) var(--page-pad);
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: var(--t-cap-size);
+  line-height: var(--t-cap-line);
+  font-weight: 550;
+}
+
+.browser-banner code {
+  padding: 0 4px;
+  border-radius: var(--r-xs);
+  background: rgba(0, 0, 0, 0.12);
+  font-family: var(--font-num);
+}

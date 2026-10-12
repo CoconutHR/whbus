@@ -50,12 +50,53 @@ interface AppStore {
   pushRecentPlace: (p: SavedPlace) => void;
 
   /* ---- 上次定位结果（跨 Tab 共享，避免重复定位）---- */
-  lastFix: (GeoPoint & { accuracy: number; at: number }) | null;
+  lastFix:
+    | (GeoPoint & { accuracy: number; at: number; simulated: boolean })
+    | null;
   lastNearby: NearbyStop[];
   setFix: (
-    fix: (GeoPoint & { accuracy: number; at: number }) | null,
+    fix: (GeoPoint & { accuracy: number; at: number; simulated: boolean }) | null,
     nearby: NearbyStop[],
   ) => void;
+
+  /* ---- 采纳的出行方案（追踪模式）---- */
+  tracking: Tracking | null;
+  setTracking: (t: Tracking | null) => void;
+
+  /* ---- 当前打开的线路详情（全 App 单一来源）---- */
+  /**
+   * 线路详情是全屏覆盖层，不占 Tab。
+   *
+   * 放在 store 而不是各屏局部 state，是因为追踪条（App 层）与首页
+   * （HomeScreen 层）都需要打开它。两处各存一份会导致"从追踪条点开的
+   * 详情页"和"从首页点开的"互相不可见。
+   */
+  openLineId: string | null;
+  setOpenLineId: (id: string | null) => void;
+
+  /* ---- 触觉反馈 ---- */
+  haptic: (style: "light" | "medium" | "heavy") => Promise<void>;
+}
+
+/**
+ * 已采纳的出行方案。
+ *
+ * 采纳后 App 进入"追踪模式"：Tab 栏上方出现常驻细条。
+ * 这是 App 的**第二状态**，不是第四层页面——用户采纳完必须知道下一步看哪，
+ * 否则会迷失在四个 Tab 里。
+ */
+export interface Tracking {
+  /** 如"回家" */
+  label: string;
+  /** 终点名，如"家" */
+  toLabel: string;
+  /** 相对采纳时刻的预计到达分钟数 */
+  arriveOffsetMin: number;
+  acceptedAt: number;
+  /** 方案涉及的线路号，用于跳转 */
+  lineNames: string[];
+  /** 已到达（用户手动结束或时间已过） */
+  done?: boolean;
 }
 
 export const useAppStore = create<AppStore>((set, get) => ({
@@ -109,6 +150,40 @@ export const useAppStore = create<AppStore>((set, get) => ({
   lastFix: null,
   lastNearby: [],
   setFix: (fix, nearby) => set({ lastFix: fix, lastNearby: nearby }),
+
+  tracking: null,
+  setTracking: (t) => set({ tracking: t }),
+
+  openLineId: null,
+  setOpenLineId: (id) => set({ openLineId: id }),
+
+  /**
+   * 触觉反馈。
+   *
+   * 只在三个时刻使用：采纳方案、车辆即将到站、收藏成功。
+   * 桌面端没有触觉，静默忽略（不报错、不弹提示）。
+   */
+  haptic: async (style) => {
+    if (typeof navigator === "undefined" || !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+      return;
+    }
+    try {
+      const h = await import("@tauri-apps/plugin-haptics");
+      switch (style) {
+        case "light":
+          await h.impactFeedback("light");
+          break;
+        case "medium":
+          await h.impactFeedback("medium");
+          break;
+        case "heavy":
+          await h.impactFeedback("heavy");
+          break;
+      }
+    } catch {
+      /* 设备不支持触觉时忽略 */
+    }
+  },
 }));
 
 /** 单独抽出以便将来换存储实现 */

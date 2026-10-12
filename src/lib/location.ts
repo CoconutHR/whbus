@@ -18,7 +18,7 @@
 
 import { useCallback, useState } from "react";
 
-import { getNearbyStops, wgs84ToGcj02 } from "./api";
+import { getNearbyStops, isTauri, wgs84ToGcj02 } from "./api";
 import { useAppStore } from "./store";
 import type { GeoPoint, NearbyStop } from "./types";
 
@@ -70,9 +70,10 @@ export function useLocation(): UseLocation {
   const [denied, setDenied] = useState(false);
 
   // 跨 Tab 共享上次定位结果，避免每次切页都重新定位。
-  // `simulated` 未持久化到 store —— 它是定位来源的临时标记，
-  // 重新定位时会重新计算，因此这里固定为 false。
-  const fix: Fix | null = lastFix ? { ...lastFix, simulated: false } : null;
+  // `simulated` 必须一并持久化：早期版本在这里写死 false，
+  // 结果桌面端重新加载页面后，模拟坐标会被当成"已定位"展示，
+  // 用户看到的精度与来源都是错的。
+  const fix: Fix | null = lastFix;
 
   const refresh = useCallback(async (): Promise<Fix | null> => {
     setLoading(true);
@@ -82,8 +83,11 @@ export function useLocation(): UseLocation {
     let accuracy = 0;
     let simulated = false;
 
-    if (!isTauriMobile()) {
-      // 桌面开发：插件不可用，直接用模拟位置
+    // 两条降级路径都落到模拟位置：
+    // 1. 不在 Tauri 里（浏览器预览）—— 插件根本不存在
+    // 2. 非移动端（桌面 Tauri）—— geolocation 插件是 mobile-only，
+    //    桌面端会**静默返回 0,0** 而不报错，所以必须先判平台
+    if (!isTauri() || !isTauriMobile()) {
       gcj = SIMULATED;
       accuracy = 25;
       simulated = true;
@@ -137,11 +141,15 @@ export function useLocation(): UseLocation {
     try {
       nearby = await getNearbyStops(gcj);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      // 浏览器预览模式下后端本来就不存在，App 顶部已有统一的横幅说明，
+      // 这里再报一次只会造成同一条信息重复三遍。
+      if (isTauri()) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
     }
 
     setDenied(false);
-    setFix({ ...gcj, accuracy, at: nextFix.at }, nearby);
+    setFix({ ...gcj, accuracy, at: nextFix.at, simulated }, nearby);
     setLoading(false);
     return nextFix;
   }, [setFix]);

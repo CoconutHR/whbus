@@ -1,0 +1,188 @@
+/* ==========================================================================
+   情景决策卡 —— 首页头号卡片
+   ========================================================================== */
+
+.dc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.dc__top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.dc__refresh {
+  min-height: 28px;
+  padding: 0 var(--space-2);
+  border-radius: var(--r-xs);
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: var(--t-cap-size);
+  font-weight: 600;
+}
+
+/* ---- 到达时刻：视觉主角 ---- */
+
+.dc__arrive {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.dc__arrive-time {
+  font-size: var(--t-display-size);
+  line-height: var(--t-display-line);
+  font-weight: var(--t-display-weight);
+  letter-spacing: -0.02em;
+  color: var(--brand);
+}
+
+.dc__arrive-label {
+  padding-bottom: 4px;
+}
+
+/* ---- 最晚出发 + 摘要 ---- */
+
+.dc__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+}
+
+/* 最晚出发是"要不要现在起身"的直接依据，给一块独立底色 */
+.dc__depart {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: 3px var(--space-3);
+  border-radius: var(--r-sm);
+  background: var(--accent-soft);
+}
+
+.dc__depart-time {
+  font-size: var(--t-head-size);
+  line-height: var(--t-head-line);
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.dc__sep {
+  width: 1px;
+  height: 14px;
+  background: var(--border);
+}
+
+.dc__stat {
+  white-space: nowrap;
+}
+
+/* ---- 分段构成 ---- */
+
+.dc__breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* 比例条：一眼看出时间花在哪 */
+.dc__bar {
+  display: flex;
+  gap: 2px;
+  height: 6px;
+  border-radius: var(--r-full);
+  overflow: hidden;
+  background: var(--surface-2);
+}
+
+.dc__bar-seg {
+  border-radius: var(--r-full);
+  min-width: 4px;
+}
+
+.dc__bar-seg--walk {
+  background: var(--text-3);
+}
+.dc__bar-seg--wait {
+  background: var(--warn);
+}
+.dc__bar-seg--bus {
+  background: var(--brand);
+}
+.dc__bar-seg--transfer {
+  background: var(--accent);
+}
+
+.dc__parts {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.dc__part {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-2);
+}
+
+.dc__timeline {
+  margin-top: var(--space-1);
+}
+
+/* ---- 线路 ---- */
+
+.dc__lines {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* ---- 出发提醒 ---- */
+
+.dc__warning {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--r-sm);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--t-label-size);
+  line-height: var(--t-label-line);
+  font-weight: 600;
+}
+
+/* ---- 操作 ---- */
+
+.dc__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.dc__actions .btn--block {
+  flex: 1;
+}
+
+/* ---- 状态与页脚 ---- */
+
+.dc__loading {
+  padding: var(--space-2) 0;
+}
+
+.dc__state {
+  padding: var(--space-1) 0;
+}
+
+.dc__foot {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: center;
+}

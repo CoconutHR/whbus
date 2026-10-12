@@ -23,11 +23,47 @@ import type {
   StopSummary,
 } from "./types";
 
+/**
+ * 是否运行在 Tauri WebView 里。
+ *
+ * Tauri 只在自己的 WebView 中注入 `window.__TAURI_INTERNALS__`。
+ * 用浏览器直开 `pnpm dev` 时它不存在，所有 `invoke` 都会抛出
+ * `TypeError: Cannot read properties of undefined (reading 'invoke')` ——
+ * 这个信息对开发者毫无帮助，所以这里主动识别并给出可操作的提示。
+ *
+ * 注意：UI 本身在浏览器里是能正常渲染的（定位走模拟位置、
+ * 数据走降级路径），因此这里**不阻止渲染**，只把错误说清楚。
+ */
+export function isTauri(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ !==
+      "undefined"
+  );
+}
+
+/** 浏览器预览模式下的统一提示 */
+export const BROWSER_MODE_HINT =
+  "当前在浏览器预览模式：界面可以正常查看，但公交数据需要 Tauri 后端。" +
+  "请用 `pnpm tauri android dev`（真机）或直接安装 APK 体验完整功能。";
+
+/** 判断一个错误是否由"不在 Tauri 里"引起 */
+function isMissingTauri(e: unknown): boolean {
+  const s = e instanceof Error ? e.message : String(e);
+  return s.includes("invoke") && (s.includes("undefined") || s.includes("__TAURI"));
+}
+
 /** 后端返回的错误都是字符串（Rust 侧 `AppError` 已实现 `Display`） */
 async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  if (!isTauri()) {
+    throw new Error(BROWSER_MODE_HINT);
+  }
   try {
     return await invoke<T>(cmd, args);
   } catch (e) {
+    if (isMissingTauri(e)) {
+      throw new Error(BROWSER_MODE_HINT);
+    }
     // 把 Rust 的错误变成可读的 Error，便于 UI 统一处理
     throw new Error(typeof e === "string" ? e : String(e));
   }

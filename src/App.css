@@ -26,3 +26,35 @@
 .app__pane[hidden] {
   display: none;
 }
+
+/*
+  线路详情覆盖层。
+  刻意**不盖住 Tab 栏** —— 用户必须随时能切走，
+  否则就成了"把人困在模态里"（评审里的高severity问题）。
+*/
+.app__overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  z-index: var(--z-sticky);
+  display: flex;
+  flex-direction: column;
+  animation: overlay-in var(--dur-base) var(--ease-emphasized);
+}
+
+@keyframes overlay-in {
+  from {
+    transform: translateX(16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app__overlay {
+    animation: none;
+  }
+}

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 
+import { DecisionCard } from "../components/DecisionCard";
 import { LineRealtimeCard } from "../components/LineRealtimeCard";
 import { PageTitle, Screen, SectionTitle } from "../components/Screen";
 import { Button, Card, Notice, SkeletonCard, StateView } from "../components/ui";
@@ -11,21 +12,19 @@ import {
   IconRefresh,
   IconStop,
   IconWalk,
-  IconWork,
 } from "../components/icons";
-import { LineDetailView } from "./LineDetailView";
 import { useAppStore, nearPlace } from "../lib/store";
 import { useLocation } from "../lib/location";
+import { useJourneyPlan } from "../lib/journey";
 import type { GeoPoint } from "../lib/types";
 import { formatDistance, nowHHMM } from "../lib/utils";
 import "./HomeScreen.css";
 
 const WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 
-export function HomeScreen() {
+export function HomeScreen({ onGoToPlan }: { onGoToPlan?: () => void }) {
   const { fix, nearby, loading, error, denied, refresh } = useLocation();
-  const { places, favorites } = useAppStore();
-  const [openLine, setOpenLine] = useState<string | null>(null);
+  const { places, favorites, setTracking, haptic, setOpenLineId } = useAppStore();
 
   const now = new Date();
   const clock = nowHHMM(now);
@@ -39,11 +38,11 @@ export function HomeScreen() {
   }, []);
 
   /**
-   * 情景判断 —— "智能展示"的骨架。
+   * 情景判断 —— "智能展示"。
    *
-   * 这里只做**基于位置**的判断（站在公司附近 → 推回家），
-   * 时间窗与历史采纳记录等加权项留到规划功能打通后接入。
+   * 只做**基于位置**的判断（站在公司附近 → 推回家）。
    * 刻意不做纯时间猜测：定位漂移时推错方向比不推更糟。
+   * 时间窗与历史采纳记录等加权项留到有真实使用数据后再接入。
    */
   const context = useMemo(() => {
     if (!fix) return null;
@@ -51,17 +50,24 @@ export function HomeScreen() {
     // 两个地点都设好才有意义——只知道一个方向就无从判断
     if (!home || !work) return null;
     const here: GeoPoint = { lng: fix.lng, lat: fix.lat };
-    if (nearPlace(here, work)) return { label: "回家", from: work, to: home };
-    if (nearPlace(here, home)) return { label: "去公司", from: home, to: work };
+    if (nearPlace(here, work)) {
+      return { label: "回家", from: work, to: home, fromLabel: "公司" };
+    }
+    if (nearPlace(here, home)) {
+      return { label: "去公司", from: home, to: work, fromLabel: "家" };
+    }
     return null;
   }, [fix, places]);
 
+  // 情景成立时才发起规划（否则纯属浪费请求）
+  const plan = useJourneyPlan(
+    context ? context.from.point : null,
+    context ? context.to.point : null,
+    Boolean(context),
+  );
+
   // 最近的站点（附近的第一个）
   const nearest = nearby[0] ?? null;
-
-  if (openLine) {
-    return <LineDetailView lineId={openLine} onBack={() => setOpenLine(null)} />;
-  }
 
   return (
     <Screen
@@ -116,22 +122,60 @@ export function HomeScreen() {
           </Notice>
         ) : null}
 
-        {/* ---------- 情景决策卡（占位：规划打通后接入真实预判） ---------- */}
+        {/* ---------- 情景决策卡：本 App 的核心价值 ---------- */}
         {context ? (
-          <Card raised>
-            <div className="row gap-2" style={{ marginBottom: "var(--space-3)" }}>
-              <IconWork size={16} />
-              <span className="t-label t-2">
-                {context.label} · 从{context.from.label}出发
-              </span>
-            </div>
-            <div className="t-head" style={{ marginBottom: "var(--space-2)" }}>
-              规划功能即将上线
-            </div>
-            <p className="t-label t-2" style={{ margin: 0 }}>
-              届时这里会显示「建议几点出发、预计几点到家、坐哪几趟车」，
-              并可在条件更优时提醒你。
-            </p>
+          <DecisionCard
+            directionLabel={context.label}
+            fromLabel={context.fromLabel}
+            toLabel={context.label === "回家" ? "家" : "公司"}
+            plan={plan.best}
+            loading={plan.loading}
+            error={plan.error}
+            computedAt={plan.computedAt}
+            stale={plan.stale}
+            onRefresh={plan.refresh}
+            onAccept={() => {
+              if (!plan.best) return;
+              // 采纳 → 进入追踪模式：Tab 栏上方会出现常驻细条，
+              // 避免用户"采纳完就不知道下一步看哪"
+              setTracking({
+                label: context.label,
+                toLabel: context.label === "回家" ? "家" : "公司",
+                arriveOffsetMin: plan.best.arriveOffsetMin,
+                acceptedAt: Date.now(),
+                lineNames: plan.best.legs
+                  .filter((l) => l.kind === "bus" && l.lineName)
+                  .map((l) => l.lineName as string),
+              });
+              void haptic("light");
+            }}
+            {...(onGoToPlan ? { onOpenPlan: onGoToPlan } : {})}
+          />
+        ) : null}
+
+        {/* ---------- 地点未设置：引导去规划页设置 ---------- */}
+        {!context && (places.home || places.work) && fix ? (
+          <Card>
+            <StateView
+              kind="info"
+              title="不在家或公司附近"
+              detail={
+                <>
+                  到了家或公司附近会自动显示「几点出发、几点到家」的建议。
+                  <br />
+                  还没设置两个地点的话，到「规划」页设置即可。
+                </>
+              }
+              {...(onGoToPlan
+                ? {
+                    action: (
+                      <Button variant="ghost" onClick={onGoToPlan}>
+                        去设置
+                      </Button>
+                    ),
+                  }
+                : {})}
+            />
           </Card>
         ) : null}
 
@@ -175,7 +219,7 @@ export function HomeScreen() {
                   key={s.stopId}
                   type="button"
                   className="stop-row"
-                  onClick={() => s.lineIds[0] && setOpenLine(s.lineIds[0])}
+                  onClick={() => s.lineIds[0] && setOpenLineId(s.lineIds[0])}
                 >
                   <span className="stop-row__icon">
                     <IconStop size={18} />
@@ -225,7 +269,7 @@ export function HomeScreen() {
                   lineName={f.lineName}
                   startStop={f.startStop}
                   endStop={f.endStop}
-                  onClick={() => setOpenLine(f.lineId)}
+                  onClick={() => setOpenLineId(f.lineId)}
                 />
               ))}
             </div>

@@ -258,3 +258,21 @@ export function CloseButton({ onClick }: { onClick: () => void }) {
     </button>
   );
 }
+
+/**
+ * 浏览器预览模式的提示条。
+ *
+ * 用浏览器直开 `pnpm dev` 时 UI 能正常渲染，但所有后端调用都不可用。
+ * 与其让每个页面各自报一堆看不懂的错，不如在顶部一次性说清楚。
+ */
+export function BrowserModeBanner() {
+  return (
+    <div className="browser-banner">
+      <IconInfo size={13} />
+      <span>
+        <b>浏览器预览模式</b>：界面可看，公交数据需要 Tauri 后端。
+        用 <code>pnpm tauri android dev</code> 或安装 APK 体验完整功能。
+      </span>
+    </div>
+  );
+}
