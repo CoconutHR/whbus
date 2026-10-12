@@ -4,9 +4,16 @@
 # 本地配齐要 3-5 GB。公开仓库的 GitHub Actions 分钟数免费，
 # 因此本地只需要 Node 和 Rust 就能开发，重活交给这里。
 #
-# 产物是 **debug APK，无需任何签名密钥**：AGP 会自动用 runner 上的
-# debug.keystore 签名，可直接侧载安装。（release APK 才需要签名密钥，
-# 届时再加 ANDROID_KEY_* 三个 secret。）
+# 产出两种包，都会附到 Release 上：
+#
+# | 包 | 签名 | 用途 |
+# |---|---|---|
+# | release | 固定密钥（GitHub Secrets） | **日常安装用这个**，小、快、可覆盖升级 |
+# | debug | 每次构建的临时密钥 | 只用于排查问题，很大（保留调试符号） |
+#
+# ⚠️ debug 包不要用来日常安装：模板里 `jniLibs.keepDebugSymbols` 会为
+# 每个 ABI 保留未剥离符号的 .so，单个就有约 160 MB，四个 ABI 合计约 612 MB，
+# 解压后接近 620 MB —— 手机解析不了会报「安装包已损坏」。
 
 name: Android APK
 
@@ -90,24 +97,24 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: ./src-tauri -> target
-          # 缓存损坏会导致 "could not compile wry"，这是已知偶发问题；
-          # 换 key 前缀即可重置缓存。
           prefix-key: v1-rust
           cache-on-failure: true
 
-      # Rust 单测覆盖 SM4 解密、坐标转换偏移量、ETA 区间、收班判定等
-      # 关键逻辑——这些是本项目最容易出错、也最该被守住的部分。
+      # Rust 单测覆盖 SM4 解密、坐标转换偏移量、ETA 区间、规划算法、
+      # 收班判定（含跨零点）、脏数据容错等最易出错的部分。
       - name: Rust unit tests
         working-directory: src-tauri
         run: cargo test --lib --verbose
 
   # ---------------------------------------------------------------------------
-  # 安卓构建
+  # 安卓构建：release（日常用）+ debug（排查用）
   # ---------------------------------------------------------------------------
   android:
-    name: 安卓 debug APK
+    name: 安卓 APK
     needs: check
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v7
 
@@ -155,46 +162,139 @@ jobs:
           link-to-sdk: true
 
       # tauri-action **不会**自动生成 Android 工程。
-      # `tauri android build` 要求 `src-tauri/gen/android` 已存在，
-      # 否则报 "Android Studio project directory ... doesn't exist.
-      # Please run `tauri android init` and try again."
-      #
-      # 这里选择在 CI 内初始化而不是把生成物提交进仓库：
-      # 官方 .gitignore 默认忽略 gen/，且生成物体积大、diff 噪音高。
-      # 初始化只需要几秒，代价可以接受。
-      #
-      # 顺序很重要：必须放在 SDK / NDK / JDK 都就位之后，
-      # 因为 init 会检查安卓环境。
+      # `tauri android build` 要求 `src-tauri/gen/android` 已存在。
+      # 顺序很重要：必须放在 SDK / NDK / JDK 都就位之后。
       - name: Init Android project
         run: pnpm tauri android init --ci
 
-      # 出 **universal** APK：单文件含全部 ABI，任何手机都能装。
+      # 模板里没有 signingConfigs，不注入就只能产出 *-unsigned.apk，
+      # 而那个包装不上。详见脚本头部注释。
+      - name: Patch Android signing config
+        if: ${{ secrets.ANDROID_KEY_BASE64 != '' }}
+        env:
+          ANDROID_KEY_BASE64: ${{ secrets.ANDROID_KEY_BASE64 }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          node scripts/patch-android-signing.mjs
+          cd src-tauri/gen/android
+          # base64 -d 对换行敏感，用 tr 清掉可能的空白
+          printf '%s' "$ANDROID_KEY_BASE64" | tr -d '\n\r ' | base64 -d > "$RUNNER_TEMP/whbus-release.jks"
+          {
+            echo "keyAlias=$ANDROID_KEY_ALIAS"
+            echo "password=$ANDROID_KEY_PASSWORD"
+            echo "storeFile=$RUNNER_TEMP/whbus-release.jks"
+          } > keystore.properties
+          test -s "$RUNNER_TEMP/whbus-release.jks" || { echo "keystore 解码为空"; exit 1; }
+          echo "✓ keystore.properties 已写入"
+
+      # ---------------- release：日常安装用这个 ----------------
       #
-      # 为什么不用 `--target aarch64` + per-ABI 路径：
-      # 实测 `--target aarch64` 只影响 Rust 的编译目标，Gradle 仍会为
-      # 全部 4 个 ABI 出包，per-ABI 产物落在 apk/arm64|arm|x86_64|x86/ 下；
-      # 而未开启 --split-per-abi 时真正保证存在的只有 apk/universal/。
-      # 早期按"单 ABI 更快"的假设去取 apk/arm64/… 结果上传步骤找不到文件
-      # （构建本身是成功的）。用 universal 既简单又不会失败。
-      - name: Build Android APK (debug)
+      # `--split-per-abi` 让每个 ABI 出独立的包，体积远小于 universal。
+      # arm64-v8a 覆盖近十年的手机，arm 覆盖更老的 32 位机型。
+      - name: Build signed release APKs
+        if: ${{ secrets.ANDROID_KEY_BASE64 != '' }}
         uses: tauri-apps/tauri-action@v1
         env:
-          # 必填：不设的话 Tauri 会扫描 $ANDROID_HOME/ndk 并取**排序最后一个**
-          # （runner 上同时存在 27/29/30 三个 NDK，会选中 30）。
           NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         with:
           mobile: android
-          args: --apk --debug
+          args: --apk --split-per-abi
 
-      # debug APK 由 AGP 用 runner 上自动生成的 debug.keystore 签名，
-      # 因此可直接侧载，且**不需要任何 GitHub Secret**。
+      # ---------------- debug：只用于排查 ----------------
       #
-      # 注意：每台 runner 的 debug keystore 都是新生成的，所以连续两次
-      # CI 构建出的 APK 签名不同，无法互相覆盖安装——装新的之前要先卸载。
-      - name: Upload APK
+      # 不含签名配置也能出包：AGP 会自动用 runner 上的 debug.keystore 签名。
+      # 但**不要用它日常安装**（体积约 160MB/ABI，见本文件头部说明）。
+      - name: Build debug APK
+        uses: tauri-apps/tauri-action@v1
+        env:
+          NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        with:
+          mobile: android
+          args: --apk --debug --target aarch64
+
+      - name: Collect APKs
+        run: |
+          set -euo pipefail
+          mkdir -p dist-apk
+          base=src-tauri/gen/android/app/build/outputs/apk
+          echo "--- 生成的 APK ---"
+          find "$base" -name '*.apk' -printf '%s\t%p\n' | sort -rn | awk -F'\t' '{printf "%8.1f MB  %s\n", $1/1048576, $2}'
+          # release 优先：只收已签名的（不带 unsigned 后缀）
+          find "$base" -name 'app-*-release.apk' -exec cp {} dist-apk/ \; 2>/dev/null || true
+          # debug 兜底
+          find "$base" -name 'app-universal-debug.apk' -exec cp {} dist-apk/ \; 2>/dev/null || true
+          echo "--- 收纳结果 ---"
+          ls -la dist-apk/ || true
+          test -n "$(ls -A dist-apk 2>/dev/null)" || { echo "没有收到任何 APK"; exit 1; }
+
+      - name: Upload APKs as artifact
         uses: actions/upload-artifact@v7
         with:
-          name: whbus-android-debug
-          path: src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
+          name: whbus-apk
+          path: dist-apk/*.apk
           if-no-files-found: error
           retention-days: 30
+
+      # 附到 Release：artifact 下载得到的是 zip，且体积受限；
+      # 直接给 APK 文件更省事，也不会出现"解压后才损坏"的误会。
+      #
+      # 用固定的 latest 标签，每次构建覆盖更新，所以永远有一个
+      # 稳定链接可分享：/releases/latest
+      - name: Publish to Release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+          else
+            TAG="latest"
+          fi
+          TITLE="whbus 安卓安装包"
+          if [ "$TAG" = "latest" ]; then
+            TITLE="whbus 最新构建（滚动更新）"
+          fi
+
+          # 已存在则先删掉同名 release，避免资产重复报错
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+
+          NOTES="$(cat <<EOF
+          自动构建于 $(date -u '+%Y-%m-%d %H:%M UTC')
+          提交 \`${GITHUB_SHA:0:7}\`
+
+          ### 下载哪个
+          - **\`app-arm64-v8a-release.apk\`** —— 绝大多数手机装这个
+          - \`app-armeabi-v7a-release.apk\` —— 较老的 32 位机型
+          - \`app-universal-debug.apk\` —— 仅用于排查问题，体积很大
+
+          ### 安装
+          下载 APK 直接点击安装。首次安装需在系统设置里允许「安装未知来源应用」。
+
+          release 包使用固定密钥签名，因此**可以直接覆盖升级**，不会要求卸载重装。
+
+          ### 注意
+          上游公交接口在收班时段（约 21:00 之后）会返回空数据，这是服务端行为，
+          不是 App 故障。按地址搜索地点需要先在「我的 → 高德地图」填入自己的高德 Key。
+          EOF
+          )"
+
+          gh release create "$TAG" dist-apk/*.apk \
+            --title "$TITLE" \
+            --notes "$NOTES" \
+            ${TAG:+"$([ "$TAG" = "latest" ] && echo "--latest" || echo "")"} \
+            || gh release create "$TAG" dist-apk/*.apk --title "$TITLE" --notes "$NOTES"
+
+      - name: Summarize
+        run: |
+          {
+            echo "## whbus 安卓包已就绪"
+            echo ""
+            echo "| 文件 | 大小 |"
+            echo "|---|---|"
+            ls -la dist-apk/*.apk 2>/dev/null | awk '{printf "| `%s` | %.1f MB |\n", $NF, $5/1048576}' | sed 's#dist-apk/##'
+            echo ""
+            echo "Release: https://github.com/${{ github.repository }}/releases/latest"
+          } >> "$GITHUB_STEP_SUMMARY"
