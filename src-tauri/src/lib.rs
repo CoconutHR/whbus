@@ -8,10 +8,12 @@
 //!   解密与密钥缓存全部留在后端，密钥永不进入 WebView。
 //! - **网络在 Rust 侧**：所有外呼走 reqwest，规避 CORS 并统一超时/退避。
 
+pub mod amap;
 pub mod api;
 pub mod commands;
 pub mod gcj;
 pub mod journey;
+pub mod keyfile;
 pub mod sm4crypto;
 pub mod transit;
 pub mod types;
@@ -23,11 +25,13 @@ pub type Result<T> = std::result::Result<T, AppError>;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let mut builder = tauri::Builder::default()
+    tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_haptics::init())
         .plugin(tauri_plugin_notification::init())
+        // 共享状态：公交接口客户端、高德客户端、站点表与速度模型缓存
+        .manage(commands::AppState::new())
         .invoke_handler(tauri::generate_handler![
             commands::get_api_state,
             commands::search_lines,
@@ -39,23 +43,37 @@ pub fn run() {
             commands::wgs84_to_gcj02_cmd,
             commands::gcj02_to_wgs84_cmd,
             commands::plan_journey,
-        ]);
+            commands::get_amap_key_status,
+            commands::set_amap_key,
+            commands::search_place,
+            commands::walking_route,
+            commands::reverse_geocode,
+        ])
+        .setup(|app| {
+            // geolocation 是 mobile-only 插件：桌面端不存在该 crate，
+            // 因此注册必须放在 cfg(mobile) 内。
+            #[cfg(mobile)]
+            {
+                use tauri::Manager;
+                app.handle()
+                    .plugin(tauri_plugin_geolocation::init())
+                    .expect("failed to init geolocation plugin");
+            }
 
-    builder = builder.setup(|app| {
-        // geolocation 是 mobile-only 插件：桌面端不存在该 crate，
-        // 因此注册必须放在 cfg(mobile) 内。
-        #[cfg(mobile)]
-        {
-            use tauri::Manager;
-            app.handle()
-                .plugin(tauri_plugin_geolocation::init())
-                .expect("failed to init geolocation plugin");
-        }
-        let _ = app;
-        Ok(())
-    });
+            // 把磁盘上已保存的高德 Key 载入内存缓存。
+            // 读不到是正常状态（用户还没配置），不算错误。
+            if let Some(key) = keyfile::load(app.handle()) {
+                use tauri::Manager;
+                if let Some(state) = app.try_state::<commands::AppState>() {
+                    if let Ok(mut g) = state.amap_key.lock() {
+                        *g = Some(key);
+                    }
+                }
+                log::info!("已载入本地保存的高德 Key");
+            }
 
-    builder
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

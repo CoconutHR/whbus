@@ -140,7 +140,6 @@ fn stop_index(detail: &LineDetail, stop_id: &str) -> Option<usize> {
 /// 此时返回 `None`，调用方应放弃这个方案而不是编一个假时间。
 fn wait_for_line(
     line_id: &str,
-    stop_no: i64,
     stop_meters: f64,
     inputs: &PlanInputs,
     model: &SpeedModel,
@@ -250,10 +249,7 @@ fn find_direct(
                     let walk2 =
                         walk_minutes(distance_m(alight_stop.point, destination), opts);
 
-                    let Some((wait, wait_spread, vehicle, conf)) = wait_for_line(
-                        line_id,
-                        detail.stops[bi].stop_no,
-                        board_m,
+                    let Some((wait, wait_spread, vehicle, conf)) = wait_for_line(line_id, board_m,
                         inputs,
                         &model,
                     ) else {
@@ -432,10 +428,7 @@ fn find_one_transfer(
                         let l1_id = &l1.base.line_id;
                         let l2_id = &l2.base.line_id;
 
-                        let Some((wait1, sp1, veh1, conf1)) = wait_for_line(
-                            l1_id,
-                            l1.stops[bi2].stop_no,
-                            b1_m,
+                        let Some((wait1, sp1, veh1, conf1)) = wait_for_line(l1_id, b1_m,
                             inputs,
                             &model,
                         ) else {
@@ -444,10 +437,7 @@ fn find_one_transfer(
                         let (ride1, rsp1) = ride_minutes(b1_m, t1_m, l1_id, inputs, &model);
 
                         // 换乘候车：从到达换乘站的时刻起算
-                        let Some((wait2, sp2, veh2, conf2)) = wait_for_line(
-                            l2_id,
-                            l2.stops[ti].stop_no,
-                            b2_m,
+                        let Some((wait2, sp2, veh2, conf2)) = wait_for_line(l2_id, b2_m,
                             inputs,
                             &model,
                         ) else {
