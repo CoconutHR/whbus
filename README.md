@@ -126,9 +126,30 @@ cd src-tauri && cargo test --lib   # Rust 单测
 pnpm dev   # http://localhost:1420
 ```
 
-桌面环境下 `tauri-plugin-geolocation` 是 **mobile-only**：它不会报错，而是**静默返回 `0,0`**。
-`src/lib/location.ts` 会自动识别这种情况并切到模拟位置（武汉常青花园片区），
-同时把 `simulated` 标记透出到 UI，避免你对着几内亚湾的坐标调试武汉公交。
+浏览器直开时**界面可以正常渲染**，但所有公交数据都取不到——
+Tauri 只在自己的 WebView 里注入 `window.__TAURI_INTERNALS__`。
+App 会识别这一点并在顶部显示「浏览器预览模式」横幅，
+定位自动降级到模拟位置（武汉常青花园片区），方便调样式与布局。
+
+### 真实渲染检查（不依赖真机）
+
+```bash
+node scripts/render-check.mjs http://127.0.0.1:1420 412 892 out.png
+```
+
+用 Chrome DevTools Protocol 驱动本机 Edge/Chrome 的无头模式，输出：
+JS 异常、横向溢出元素、四个 Tab 的正文与状态文案、以及一张截图。
+
+不需要 bsk 或 puppeteer——只用原生 `WebSocket` + CDP HTTP 接口。
+改完 UI 先跑一遍，能挡住"白屏""布局撑破""运行时异常"这类问题。
+
+### 在真机上跑
+
+```bash
+pnpm tauri android dev    # 需要 Android SDK + NDK
+```
+
+一般不需要：直接推送到 `main` 让 CI 出 APK 更快。
 
 ### 出安卓 APK
 
