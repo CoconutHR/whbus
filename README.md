@@ -135,12 +135,27 @@ pnpm dev   # http://localhost:1420
 推送到 `main` 或手动触发 workflow 即可，无需本地配置任何安卓环境：
 
 ```
-GitHub → Actions → Android APK → 下载 whbus-android-debug-arm64
+GitHub → Actions → Android APK → 最新一次运行 → Artifacts → whbus-android-debug
 ```
 
-debug APK 由 AGP 自动用 runner 上的 debug.keystore 签名，**不需要任何 secret**，可直接侧载。
+或在命令行：
 
-> ⚠️ 每次 CI 构建的 debug keystore 都是新生成的，所以**连续两次构建的 APK 无法互相覆盖安装**，需要先卸载。
+```bash
+gh run download --name whbus-android-debug
+```
+
+产物是 `app-universal-debug.apk`（单文件含全部 ABI，任何手机都能装）。
+debug 版由 AGP 自动用 runner 上的 debug.keystore 签名，**不需要任何 Secret**，
+下载后直接侧载安装即可。
+
+> ⚠️ 两个注意点
+>
+> 1. 每次 CI 构建的 debug keystore 都是新生成的，所以**连续两次构建的 APK
+>    无法互相覆盖安装**，装新的之前要先卸载。
+> 2. debug APK 体积较大（约 160 MB），因为它包含全部 4 个 ABI 且未裁剪调试符号。
+>    需要小体积时用 release 构建。
+
+CI 单次耗时约 **8-9 分钟**（含类型检查、72 个 Rust 单测、安卓交叉编译）。
 
 ---
 
