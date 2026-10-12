@@ -18,10 +18,15 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# 同一分支的旧构建自动取消，省 CI 时间
+# 同一分支的旧构建自动取消，省 CI 时间。
+#
+# 用 head_sha 而非 ref 作为 key：连续两次推送时，各自的 SHA 不同，
+# 因此后一次不会取消前一次的安卓构建。
+# （早期用 ref 做 key，结果一次推送把上一次正在跑的安卓构建取消了，
+#  白等一场。安卓交叉编译要 8-10 分钟，被取消的代价很高。）
 concurrency:
-  group: android-${{ github.ref }}
-  cancel-in-progress: true
+  group: android-${{ github.workflow }}-${{ github.head_ref || github.sha }}
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
@@ -148,6 +153,20 @@ jobs:
         with:
           ndk-version: r29
           link-to-sdk: true
+
+      # tauri-action **不会**自动生成 Android 工程。
+      # `tauri android build` 要求 `src-tauri/gen/android` 已存在，
+      # 否则报 "Android Studio project directory ... doesn't exist.
+      # Please run `tauri android init` and try again."
+      #
+      # 这里选择在 CI 内初始化而不是把生成物提交进仓库：
+      # 官方 .gitignore 默认忽略 gen/，且生成物体积大、diff 噪音高。
+      # 初始化只需要几秒，代价可以接受。
+      #
+      # 顺序很重要：必须放在 SDK / NDK / JDK 都就位之后，
+      # 因为 init 会检查安卓环境。
+      - name: Init Android project
+        run: pnpm tauri android init --ci
 
       # 只有单个 ABI 用于日常侧载，构建时间几乎减半。
       # 需要给其他架构出包时把 target 去掉即可。
