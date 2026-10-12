@@ -151,32 +151,53 @@ pnpm tauri android dev    # 需要 Android SDK + NDK
 
 一般不需要：直接推送到 `main` 让 CI 出 APK 更快。
 
-### 出安卓 APK
+### 安装到手机
 
-推送到 `main` 或手动触发 workflow 即可，无需本地配置任何安卓环境：
+**直接下载，不需要任何环境**：
+
+| 文件 | 大小 | 说明 |
+|---|---|---|
+| [**whbus-arm64-v8a.apk**](https://github.com/CoconutHR/whbus/releases/latest/download/whbus-arm64-v8a.apk) | ~8 MB | **绝大多数手机装这个** |
+| [whbus-armeabi-v7a.apk](https://github.com/CoconutHR/whbus/releases/latest/download/whbus-armeabi-v7a.apk) | ~6 MB | 较老的 32 位机型 |
+| [whbus-x86_64.apk](https://github.com/CoconutHR/whbus/releases/latest/download/whbus-x86_64.apk) | ~9 MB | 模拟器 |
+| [whbus-debug-universal.apk](https://github.com/CoconutHR/whbus/releases/latest/download/whbus-debug-universal.apk) | ~167 MB | 仅排查问题用，**别日常安装** |
+
+不确定架构就先试 arm64；装不上再试 armeabi-v7a。
+首次安装需在系统设置里允许「安装未知来源应用」。
+
+release 包用**固定密钥**签名，可以直接覆盖升级；debug 包每次构建都是临时密钥，
+装新的之前必须先卸载。
+
+全部产物在 <https://github.com/CoconutHR/whbus/releases/latest>。
+
+> ⚠️ **不要用 Actions 里的 Artifacts 下载日常使用。**
+> 那是个 zip，且里面是 debug 包。debug 构建的 Gradle 模板里
+> `jniLibs.keepDebugSymbols` 会为每个 ABI 保留**未剥离符号**的 `.so`，
+> 单个就约 160 MB，四个 ABI 合计约 612 MB，解压后接近 620 MB ——
+> 手机会因为解析失败而报「安装包已损坏」。release 构建会剥离符号，
+> 同样的包只有约 8 MB。
+
+### 自己出包
+
+推送到 `main` 或手动触发 workflow 即可，无需本地配置任何安卓环境。
+CI 会自动构建 release（签名）+ debug，上传 Artifact 并发布到 Release。
+
+CI 单次耗时约 **15-18 分钟**（含类型检查、72 个 Rust 单测、release 与 debug 两次安卓交叉编译）。
+
+### 签名密钥
+
+release 签名密钥存在仓库 Secrets 里（`ANDROID_KEY_ALIAS` / `ANDROID_KEY_PASSWORD` /
+`ANDROID_KEY_BASE64`），**不在仓库内**。证书指纹：
 
 ```
-GitHub → Actions → Android APK → 最新一次运行 → Artifacts → whbus-android-debug
+SHA256: 74:85:08:79:E1:D0:96:C4:60:CC:54:35:1A:17:03:37:C4:66:5A:56:C0:A5:F5:FF:AA:F7:26:9A:A6:68:A8:91
 ```
 
-或在命令行：
+**请务必自己备份这个 keystore。** 它一旦丢失，你就再也无法给已安装的 App
+发布覆盖升级——用户只能卸载重装（数据会丢）。
 
-```bash
-gh run download --name whbus-android-debug
-```
-
-产物是 `app-universal-debug.apk`（单文件含全部 ABI，任何手机都能装）。
-debug 版由 AGP 自动用 runner 上的 debug.keystore 签名，**不需要任何 Secret**，
-下载后直接侧载安装即可。
-
-> ⚠️ 两个注意点
->
-> 1. 每次 CI 构建的 debug keystore 都是新生成的，所以**连续两次构建的 APK
->    无法互相覆盖安装**，装新的之前要先卸载。
-> 2. debug APK 体积较大（约 160 MB），因为它包含全部 4 个 ABI 且未裁剪调试符号。
->    需要小体积时用 release 构建。
-
-CI 单次耗时约 **8-9 分钟**（含类型检查、72 个 Rust 单测、安卓交叉编译）。
+如果 Secrets 缺失（例如 fork 仓库），工作流会跳过签名步骤并输出警告，
+此时只会产出无法安装的 `*-unsigned.apk`，不会静默产出一个看起来正常的坏包。
 
 ---
 
@@ -195,10 +216,16 @@ src/
 src-tauri/src/
   gcj.rs             WGS-84 ⇄ GCJ-02 转换与路径几何
   sm4crypto.rs       SM4-ECB + PKCS#7 解密
+  amap.rs            高德 Web API（地址搜索 / 步行路径）
   api.rs             公交接口客户端（限流、重试、密钥缓存）
   transit.rs         车辆定位、ETA 区间、速度模型
-  journey.rs         出行规划（进行中）
+  journey.rs         出行规划（直达 + 一次换乘）
+  keyfile.rs         高德 Key 的本地持久化
   commands.rs        Tauri 命令层
+scripts/
+  patch-android-signing.mjs  CI 里给生成的 Gradle 注入 release 签名配置
+  render-check.mjs           用 CDP 做真实渲染检查（无 JS 异常 / 无溢出）
+  check-workflow.py          校验工作流 YAML 与 GitHub 特有约束
 ```
 
 ---
