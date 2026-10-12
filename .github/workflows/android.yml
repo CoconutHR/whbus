@@ -168,33 +168,50 @@ jobs:
         run: pnpm tauri android init --ci
 
       # 模板里没有 signingConfigs，不注入就只能产出 *-unsigned.apk，
-      # 而那个包装不上。详见脚本头部注释。
+      # 而那个包装不上（INSTALL_PARSE_FAILED_NO_CERTIFICATES）。
+      # 详见 scripts/patch-android-signing.mjs 头部注释。
+      #
+      # ⚠️ 这里**不能**用 `if: secrets.X != ''`：GitHub Actions 的
+      # step 级 if 不支持 secrets 上下文（只有 job 级支持），
+      # 写了会导致整个工作流在解析阶段就失败、一个 job 都不跑。
+      # 因此改成在脚本内部判空，并通过 step output 把结果传给后续步骤。
       - name: Patch Android signing config
-        if: ${{ secrets.ANDROID_KEY_BASE64 != '' }}
+        id: signing
         env:
           ANDROID_KEY_BASE64: ${{ secrets.ANDROID_KEY_BASE64 }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
+
+          if [ -z "${ANDROID_KEY_BASE64:-}" ]; then
+            echo "::warning::未配置 ANDROID_KEY_BASE64，跳过签名。只会产出未签名的 release 包（无法安装）。"
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           node scripts/patch-android-signing.mjs
           cd src-tauri/gen/android
-          # base64 -d 对换行敏感，用 tr 清掉可能的空白
+
+          # base64 里可能夹带换行或空格，先清掉再解码
           printf '%s' "$ANDROID_KEY_BASE64" | tr -d '\n\r ' | base64 -d > "$RUNNER_TEMP/whbus-release.jks"
+          test -s "$RUNNER_TEMP/whbus-release.jks" || { echo "::error::keystore 解码后为空"; exit 1; }
+
           {
             echo "keyAlias=$ANDROID_KEY_ALIAS"
             echo "password=$ANDROID_KEY_PASSWORD"
             echo "storeFile=$RUNNER_TEMP/whbus-release.jks"
           } > keystore.properties
-          test -s "$RUNNER_TEMP/whbus-release.jks" || { echo "keystore 解码为空"; exit 1; }
-          echo "✓ keystore.properties 已写入"
+
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+          echo "✓ 签名配置就绪"
 
       # ---------------- release：日常安装用这个 ----------------
       #
       # `--split-per-abi` 让每个 ABI 出独立的包，体积远小于 universal。
       # arm64-v8a 覆盖近十年的手机，arm 覆盖更老的 32 位机型。
       - name: Build signed release APKs
-        if: ${{ secrets.ANDROID_KEY_BASE64 != '' }}
+        if: steps.signing.outputs.signed == 'true'
         uses: tauri-apps/tauri-action@v1
         env:
           NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
@@ -219,15 +236,31 @@ jobs:
           set -euo pipefail
           mkdir -p dist-apk
           base=src-tauri/gen/android/app/build/outputs/apk
-          echo "--- 生成的 APK ---"
-          find "$base" -name '*.apk' -printf '%s\t%p\n' | sort -rn | awk -F'\t' '{printf "%8.1f MB  %s\n", $1/1048576, $2}'
-          # release 优先：只收已签名的（不带 unsigned 后缀）
-          find "$base" -name 'app-*-release.apk' -exec cp {} dist-apk/ \; 2>/dev/null || true
-          # debug 兜底
-          find "$base" -name 'app-universal-debug.apk' -exec cp {} dist-apk/ \; 2>/dev/null || true
-          echo "--- 收纳结果 ---"
-          ls -la dist-apk/ || true
-          test -n "$(ls -A dist-apk 2>/dev/null)" || { echo "没有收到任何 APK"; exit 1; }
+
+          echo "--- 构建产生的全部 APK ---"
+          find "$base" -name '*.apk' -printf '%s\t%p\n' | sort -rn |
+            awk -F'\t' '{printf "%9.2f MB  %s\n", $1/1048576, $2}'
+
+          # release：只收已签名的。未签名包名带 -unsigned 后缀，装了会报
+          # INSTALL_PARSE_FAILED_NO_CERTIFICATES，所以用 -name 'app-*-release.apk'
+          # 精确匹配（'*-unsigned.apk' 不满足该模式）。
+          n_rel=$(find "$base" -name 'app-*-release.apk' | wc -l)
+          if [ "$n_rel" -gt 0 ]; then
+            find "$base" -name 'app-*-release.apk' -exec cp -t dist-apk/ {} +
+            echo "✓ 收集到 $n_rel 个 release 包"
+          else
+            echo "::warning::没有已签名的 release 包（签名是否就绪？）"
+          fi
+
+          # debug 兜底：保证至少有一个可下载的产物
+          if [ "$(find "$base" -name 'app-universal-debug.apk' | wc -l)" -gt 0 ]; then
+            find "$base" -name 'app-universal-debug.apk' -exec cp -t dist-apk/ {} +
+            echo "✓ 已附带 debug 包（仅排查用）"
+          fi
+
+          echo "--- 最终收纳 ---"
+          ls -la dist-apk/
+          test -n "$(ls -A dist-apk)" || { echo "::error::没有收到任何 APK"; exit 1; }
 
       - name: Upload APKs as artifact
         uses: actions/upload-artifact@v7
@@ -237,55 +270,62 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      # 附到 Release：artifact 下载得到的是 zip，且体积受限；
-      # 直接给 APK 文件更省事，也不会出现"解压后才损坏"的误会。
+      # 附到 Release：artifact 下载得到的是 zip，且上传后体积受限；
+      # 直接给 APK 文件更省事，也不会再出现"解压后才发现包有问题"的误会。
       #
-      # 用固定的 latest 标签，每次构建覆盖更新，所以永远有一个
-      # 稳定链接可分享：/releases/latest
+      # 用固定的 latest 标签滚动更新，于是有一个稳定链接可分享：
+      #   https://github.com/CoconutHR/whbus/releases/latest
       - name: Publish to Release
         if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+
           if [ "${{ github.ref_type }}" = "tag" ]; then
             TAG="${{ github.ref_name }}"
+            TITLE="whbus ${{ github.ref_name }}"
           else
             TAG="latest"
-          fi
-          TITLE="whbus 安卓安装包"
-          if [ "$TAG" = "latest" ]; then
             TITLE="whbus 最新构建（滚动更新）"
           fi
 
-          # 已存在则先删掉同名 release，避免资产重复报错
-          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          # 已存在则先删掉同名 release，避免资产重名报错。
+          # 不加 --cleanup-tag：那会顺手删掉 git tag。
+          gh release delete "$TAG" --yes 2>/dev/null || true
 
           NOTES="$(cat <<EOF
           自动构建于 $(date -u '+%Y-%m-%d %H:%M UTC')
           提交 \`${GITHUB_SHA:0:7}\`
 
           ### 下载哪个
-          - **\`app-arm64-v8a-release.apk\`** —— 绝大多数手机装这个
-          - \`app-armeabi-v7a-release.apk\` —— 较老的 32 位机型
-          - \`app-universal-debug.apk\` —— 仅用于排查问题，体积很大
+
+          | 文件 | 说明 |
+          |---|---|
+          | \`app-arm64-v8a-release.apk\` | **绝大多数手机装这个** |
+          | \`app-armeabi-v7a-release.apk\` | 较老的 32 位机型 |
+          | \`app-universal-debug.apk\` | 仅用于排查问题，体积很大（含未剥离符号，约 620 MB） |
 
           ### 安装
-          下载 APK 直接点击安装。首次安装需在系统设置里允许「安装未知来源应用」。
 
-          release 包使用固定密钥签名，因此**可以直接覆盖升级**，不会要求卸载重装。
+          下载 APK 后直接点击安装。首次安装需在系统设置里允许「安装未知来源应用」。
+
+          release 包使用固定密钥签名，因此**可以直接覆盖升级**，不需要卸载重装。
+          debug 包每次构建用的都是临时密钥，装新的之前必须先卸载旧的。
 
           ### 注意
-          上游公交接口在收班时段（约 21:00 之后）会返回空数据，这是服务端行为，
-          不是 App 故障。按地址搜索地点需要先在「我的 → 高德地图」填入自己的高德 Key。
+
+          - 上游公交接口在收班时段（约 21:00 之后）会返回空数据，这是服务端行为，不是 App 故障。
+          - 按地址搜索地点需要先在「我的 → 高德地图」填入你自己的高德 Key（免费申请，
+            类型选「Web 服务」）。公交接口只认站名，不认小区名与写字楼名。
           EOF
           )"
 
-          gh release create "$TAG" dist-apk/*.apk \
-            --title "$TITLE" \
-            --notes "$NOTES" \
-            ${TAG:+"$([ "$TAG" = "latest" ] && echo "--latest" || echo "")"} \
-            || gh release create "$TAG" dist-apk/*.apk --title "$TITLE" --notes "$NOTES"
+          if [ "$TAG" = "latest" ]; then
+            gh release create "$TAG" dist-apk/*.apk --title "$TITLE" --notes "$NOTES"
+          else
+            gh release create "$TAG" dist-apk/*.apk --title "$TITLE" --notes "$NOTES" --latest
+          fi
 
       - name: Summarize
         run: |
