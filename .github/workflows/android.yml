@@ -241,22 +241,40 @@ jobs:
           find "$base" -name '*.apk' -printf '%s\t%p\n' | sort -rn |
             awk -F'\t' '{printf "%9.2f MB  %s\n", $1/1048576, $2}'
 
-          # release：只收已签名的。未签名包名带 -unsigned 后缀，装了会报
-          # INSTALL_PARSE_FAILED_NO_CERTIFICATES，所以用 -name 'app-*-release.apk'
-          # 精确匹配（'*-unsigned.apk' 不满足该模式）。
-          n_rel=$(find "$base" -name 'app-*-release.apk' | wc -l)
-          if [ "$n_rel" -gt 0 ]; then
-            find "$base" -name 'app-*-release.apk' -exec cp -t dist-apk/ {} +
-            echo "✓ 收集到 $n_rel 个 release 包"
-          else
+          # 重命名成一眼能选的名字。
+          # 上游产物叫 app-arm64-release.apk，用户看不出该下哪个——
+          # 而这个细节直接决定了他们会不会去下那个 167MB 的 debug 包。
+          copy_renamed() {
+            local pattern="$1" dest="$2"
+            local files
+            files=$(find "$base" -name "$pattern")
+            if [ -n "$files" ]; then
+              # shellcheck disable=SC2086
+              cp -t dist-apk/ $files
+              local src
+              src=$(basename "$(echo "$files" | head -1)")
+              mv "dist-apk/$src" "dist-apk/$dest"
+              echo "✓ $src  ->  $dest"
+              return 0
+            fi
+            return 1
+          }
+
+          n=0
+          # release：只匹配不带 -unsigned 的已签名包
+          copy_renamed 'app-arm64-release.apk'      'whbus-arm64-v8a.apk'    && n=$((n+1)) || true
+          copy_renamed 'app-arm-release.apk'        'whbus-armeabi-v7a.apk'  && n=$((n+1)) || true
+          copy_renamed 'app-x86_64-release.apk'     'whbus-x86_64.apk'       && n=$((n+1)) || true
+          copy_renamed 'app-x86-release.apk'        'whbus-x86.apk'          && n=$((n+1)) || true
+
+          if [ "$n" -eq 0 ]; then
             echo "::warning::没有已签名的 release 包（签名是否就绪？）"
+          else
+            echo "✓ 收集到 $n 个已签名 release 包"
           fi
 
           # debug 兜底：保证至少有一个可下载的产物
-          if [ "$(find "$base" -name 'app-universal-debug.apk' | wc -l)" -gt 0 ]; then
-            find "$base" -name 'app-universal-debug.apk' -exec cp -t dist-apk/ {} +
-            echo "✓ 已附带 debug 包（仅排查用）"
-          fi
+          copy_renamed 'app-universal-debug.apk' 'whbus-debug-universal.apk' || true
 
           echo "--- 最终收纳 ---"
           ls -la dist-apk/
@@ -300,24 +318,29 @@ jobs:
 
           ### 下载哪个
 
-          | 文件 | 说明 |
-          |---|---|
-          | \`app-arm64-v8a-release.apk\` | **绝大多数手机装这个** |
-          | \`app-armeabi-v7a-release.apk\` | 较老的 32 位机型 |
-          | \`app-universal-debug.apk\` | 仅用于排查问题，体积很大（含未剥离符号，约 620 MB） |
+          | 文件 | 大小 | 说明 |
+          |---|---|---|
+          | **\`whbus-arm64-v8a.apk\`** | ~8 MB | **绝大多数手机装这个** |
+          | \`whbus-armeabi-v7a.apk\` | ~6 MB | 较老的 32 位机型 |
+          | \`whbus-x86_64.apk\` / \`whbus-x86.apk\` | ~9 MB | 模拟器用 |
+          | \`whbus-debug-universal.apk\` | ~167 MB | 仅排查问题用，**别日常安装** |
+
+          不确定自己手机是哪种架构时，先试 \`whbus-arm64-v8a.apk\`；
+          装不上再试 \`whbus-armeabi-v7a.apk\`。
 
           ### 安装
 
-          下载 APK 后直接点击安装。首次安装需在系统设置里允许「安装未知来源应用」。
+          下载后直接点击安装。首次安装需在系统设置里允许「安装未知来源应用」。
 
-          release 包使用固定密钥签名，因此**可以直接覆盖升级**，不需要卸载重装。
+          release 包使用**固定密钥**签名，因此可以直接覆盖升级，不需要卸载重装。
           debug 包每次构建用的都是临时密钥，装新的之前必须先卸载旧的。
 
           ### 注意
 
           - 上游公交接口在收班时段（约 21:00 之后）会返回空数据，这是服务端行为，不是 App 故障。
-          - 按地址搜索地点需要先在「我的 → 高德地图」填入你自己的高德 Key（免费申请，
-            类型选「Web 服务」）。公交接口只认站名，不认小区名与写字楼名。
+          - 按地址搜索地点需要先在「我的 → 高德地图」填入你自己的高德 Key
+            （[免费申请](https://lbs.amap.com/)，类型选「Web 服务」）。
+            公交接口只认站名，不认小区名与写字楼名。
           EOF
           )"
 
