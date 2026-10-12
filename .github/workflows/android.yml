@@ -168,8 +168,14 @@ jobs:
       - name: Init Android project
         run: pnpm tauri android init --ci
 
-      # 只有单个 ABI 用于日常侧载，构建时间几乎减半。
-      # 需要给其他架构出包时把 target 去掉即可。
+      # 出 **universal** APK：单文件含全部 ABI，任何手机都能装。
+      #
+      # 为什么不用 `--target aarch64` + per-ABI 路径：
+      # 实测 `--target aarch64` 只影响 Rust 的编译目标，Gradle 仍会为
+      # 全部 4 个 ABI 出包，per-ABI 产物落在 apk/arm64|arm|x86_64|x86/ 下；
+      # 而未开启 --split-per-abi 时真正保证存在的只有 apk/universal/。
+      # 早期按"单 ABI 更快"的假设去取 apk/arm64/… 结果上传步骤找不到文件
+      # （构建本身是成功的）。用 universal 既简单又不会失败。
       - name: Build Android APK (debug)
         uses: tauri-apps/tauri-action@v1
         env:
@@ -178,12 +184,17 @@ jobs:
           NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         with:
           mobile: android
-          args: --apk --debug --target aarch64
+          args: --apk --debug
 
+      # debug APK 由 AGP 用 runner 上自动生成的 debug.keystore 签名，
+      # 因此可直接侧载，且**不需要任何 GitHub Secret**。
+      #
+      # 注意：每台 runner 的 debug keystore 都是新生成的，所以连续两次
+      # CI 构建出的 APK 签名不同，无法互相覆盖安装——装新的之前要先卸载。
       - name: Upload APK
         uses: actions/upload-artifact@v7
         with:
-          name: whbus-android-debug-arm64
-          path: src-tauri/gen/android/app/build/outputs/apk/arm64/debug/app-arm64-debug.apk
+          name: whbus-android-debug
+          path: src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
           if-no-files-found: error
           retention-days: 30
