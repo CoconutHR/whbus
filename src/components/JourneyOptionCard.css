@@ -1,0 +1,139 @@
+/* ==========================================================================
+   方案卡片与逐段时间轴
+   ========================================================================== */
+
+.joc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.joc__tags {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* ---- 结论行：最晚出发 → 到达（视觉主角）---- */
+
+.joc__headline {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.joc__time {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.joc__time-label {
+  display: block;
+}
+
+.joc__clock {
+  font-size: 28px;
+  line-height: 32px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* 到达时刻用品牌色：它是用户真正关心的结果 */
+.joc__clock--arrive {
+  color: var(--brand);
+}
+
+.joc__arrow {
+  color: var(--text-3);
+  padding-bottom: 6px;
+}
+
+.joc__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.joc__lines {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.joc__action {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ---- 逐段时间轴 ---- */
+
+.legs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-3);
+}
+
+.legs__item {
+  display: flex;
+  gap: var(--space-3);
+  min-height: 52px;
+}
+
+.legs__rail {
+  position: relative;
+  width: 12px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.legs__dot {
+  position: absolute;
+  top: 6px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2.4px solid var(--border-strong);
+  z-index: 1;
+}
+
+/* 不同段型用不同填充，**不只靠颜色区分** */
+.legs__dot--walk {
+  border-color: var(--text-3);
+  background: var(--surface);
+}
+.legs__dot--wait {
+  border-color: var(--warn);
+  background: var(--surface);
+}
+.legs__dot--bus {
+  border-color: var(--brand);
+  background: var(--brand);
+}
+.legs__dot--transfer {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.legs__line {
+  position: absolute;
+  top: 16px;
+  bottom: -6px;
+  width: 2px;
+  background: var(--border);
+  border-radius: 1px;
+}
+
+.legs__body {
+  flex: 1;
+  min-width: 0;
+  padding-bottom: var(--space-3);
+}

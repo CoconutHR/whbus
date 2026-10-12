@@ -10,7 +10,7 @@ import {
   IconRefresh,
   IconStar,
 } from "../components/icons";
-import { getApiState } from "../lib/api";
+import { getAmapKeyStatus, getApiState, setAmapKey, type AmapKeyStatus } from "../lib/api";
 import { useAppStore } from "../lib/store";
 import { useLocation } from "../lib/location";
 import type { ApiState } from "../lib/types";
@@ -29,6 +29,11 @@ export function SettingsScreen({
   const [api, setApi] = useState<ApiState | null>(null);
   const [apiErr, setApiErr] = useState<string | null>(null);
 
+  const [amap, setAmap] = useState<AmapKeyStatus | null>(null);
+  const [amapKeyInput, setAmapKeyInput] = useState("");
+  const [amapSaving, setAmapSaving] = useState(false);
+  const [amapErr, setAmapErr] = useState<string | null>(null);
+
   const loadApi = async () => {
     try {
       setApi(await getApiState());
@@ -38,8 +43,31 @@ export function SettingsScreen({
     }
   };
 
+  const loadAmap = async () => {
+    try {
+      setAmap(await getAmapKeyStatus());
+      setAmapErr(null);
+    } catch (e) {
+      setAmapErr(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const saveAmapKey = async () => {
+    setAmapSaving(true);
+    setAmapErr(null);
+    try {
+      setAmap(await setAmapKey(amapKeyInput));
+      setAmapKeyInput("");
+    } catch (e) {
+      setAmapErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAmapSaving(false);
+    }
+  };
+
   useEffect(() => {
     void loadApi();
+    void loadAmap();
   }, []);
 
   return (
@@ -122,6 +150,98 @@ export function SettingsScreen({
               </span>
             </Notice>
           </div>
+        </Card>
+      </section>
+
+      {/* ---------- 高德地图（地址搜索） ---------- */}
+      <section>
+        <SectionTitle
+          action={
+            <button
+              type="button"
+              className="t-cap"
+              style={{ color: "var(--brand)", minHeight: 32 }}
+              onClick={() => void loadAmap()}
+            >
+              <IconRefresh size={13} /> 检查
+            </button>
+          }
+        >
+          高德地图
+        </SectionTitle>
+        <Card>
+          <div className="kv">
+            <Row label="Key 状态">
+              {amap?.configured ? (
+                <Chip tone="live">已配置</Chip>
+              ) : (
+                <Chip tone="warn">未配置</Chip>
+              )}
+            </Row>
+            {amap?.masked ? (
+              <Row label="Key">
+                <span className="tnum t-cap t-2">{amap.masked}</span>
+              </Row>
+            ) : null}
+          </div>
+
+          <div style={{ marginTop: "var(--space-3)" }}>
+            <Notice tone={amap?.configured ? "info" : "warn"}>
+              <IconInfo size={14} />
+              <span>
+                {amap?.configured
+                  ? "已启用按地址搜索地点。Key 只保存在本机，不会上传。"
+                  : "公交接口只认站名，不认小区名与写字楼名。配置高德 Key 后即可按地址搜索（如「楚天雅苑」）。"}
+              </span>
+            </Notice>
+          </div>
+
+          <div style={{ marginTop: "var(--space-3)" }}>
+            <input
+              className="settings__keyinput"
+              type="text"
+              value={amapKeyInput}
+              onChange={(e) => setAmapKeyInput(e.target.value)}
+              placeholder={amap?.configured ? "输入新 Key 可覆盖" : "粘贴高德 Web 服务 Key"}
+              autoComplete="off"
+              spellCheck={false}
+              aria-label="高德 Key"
+            />
+            <div className="row gap-2" style={{ marginTop: "var(--space-2)" }}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void saveAmapKey()}
+                disabled={!amapKeyInput.trim() || amapSaving}
+              >
+                {amapSaving ? "保存中…" : "保存"}
+              </Button>
+              {amap?.configured ? (
+                <Button
+                  variant="quiet"
+                  size="sm"
+                  onClick={() => {
+                    setAmapKeyInput("");
+                    void (async () => {
+                      try {
+                        setAmap(await setAmapKey(""));
+                      } catch {
+                        /* 清除失败时保持原状态 */
+                      }
+                    })();
+                  }}
+                >
+                  清除
+                </Button>
+              ) : null}
+            </div>
+          </div>
+
+          {amapErr ? (
+            <div style={{ marginTop: "var(--space-2)" }}>
+              <Notice tone="danger">{amapErr}</Notice>
+            </div>
+          ) : null}
         </Card>
       </section>
 

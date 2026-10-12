@@ -43,12 +43,39 @@
 }
 
 .plan__od-field {
+  display: block;
+  width: 100%;
+  min-height: 52px;
   padding: var(--space-2) 0;
+  text-align: left;
   border-bottom: 1px solid var(--border);
+  border-radius: 0;
+}
+
+.plan__od-field:active {
+  opacity: 0.72;
 }
 
 .plan__od-field--last {
   border-bottom: none;
+}
+
+/* 到达时间输入：原生 time 控件在 WebView 里样式不一致，这里统一尺寸 */
+.plan__time {
+  height: 40px;
+  padding: 0 var(--space-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font-size: var(--t-label-size);
+  font-variant-numeric: tabular-nums;
+  outline: none;
+  flex-shrink: 0;
+}
+
+.plan__time:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
 }
 
 .plan__swap {
@@ -93,6 +120,14 @@
   border-radius: var(--r-sm);
   background: var(--surface);
   color: var(--brand);
+}
+
+.place-row__main {
+  min-width: 0;
+  min-height: 0;
+  display: block;
+  background: none;
+  border: none;
 }
 
 .place-row--compact .place-row__icon {

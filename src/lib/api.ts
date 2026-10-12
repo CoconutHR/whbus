@@ -88,3 +88,49 @@ export const gcj02ToWgs84 = (point: GeoPoint) =>
 
 export const planJourney = (query: JourneyQuery) =>
   call<JourneyOption[]>("plan_journey", { query });
+
+/* ------------------------------------------------- 高德：地址搜索与步行 */
+
+export interface AmapKeyStatus {
+  configured: boolean;
+  /** 形如 `c269…b9f`，仅用于确认填对了 */
+  masked: string | null;
+}
+
+export interface Place {
+  name: string;
+  address: string;
+  /** **GCJ-02**，可直接喂给 getNearbyStops */
+  point: GeoPoint;
+  district: string;
+  /** POI 类型，如"商务住宅;住宅区;住宅小区" */
+  kind: string | null;
+}
+
+export interface WalkingRoute {
+  meters: number;
+  minutes: number;
+}
+
+export const getAmapKeyStatus = () => call<AmapKeyStatus>("get_amap_key_status");
+
+/** 设置高德 Key。传空字符串表示清除。Key 保存在应用私有目录，不进版本库。 */
+export const setAmapKey = (key: string) =>
+  call<AmapKeyStatus>("set_amap_key", { key });
+
+/**
+ * 按关键词搜索地点。
+ *
+ * 这是解决"公交接口搜不到小区名/写字楼名"的核心能力：
+ * `楚天雅苑` / `洪山科创大厦` 这类输入公交接口返回空，高德能定位。
+ */
+export const searchPlace = (keyword: string, city?: string) =>
+  call<Place[]>("search_place", { keyword, city: city ?? null });
+
+/** 步行路径规划（真实路径，替代直线距离估算） */
+export const walkingRoute = (from: GeoPoint, to: GeoPoint) =>
+  call<WalkingRoute>("walking_route", { from, to });
+
+/** 坐标 → 地址 */
+export const reverseGeocode = (point: GeoPoint) =>
+  call<Place | null>("reverse_geocode", { point });
