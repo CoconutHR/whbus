@@ -1,0 +1,16 @@
+# 统一换行符，避免 Windows 与 Linux 上产生无意义的 diff
+* text=auto eol=lf
+
+# 二进制文件不做换行转换
+*.png binary
+*.jpg binary
+*.ico binary
+*.icns binary
+*.jks binary
+*.keystore binary
+*.apk binary
+*.aab binary
+
+# 生成物在 diff 里折叠
+pnpm-lock.yaml linguist-generated=true
+Cargo.lock linguist-generated=true

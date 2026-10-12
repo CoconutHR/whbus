@@ -1,0 +1,263 @@
+/* ==========================================================================
+   全局重置与基础样式
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  /* 禁止 WebView 橡皮筋回弹 —— 与安卓原生手感打架 */
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--t-body-size);
+  line-height: var(--t-body-line);
+  font-weight: var(--t-body-weight);
+  color: var(--text);
+  background: var(--bg);
+  /* 禁止长按选中，这是原生 App 的默认行为 */
+  -webkit-user-select: none;
+  user-select: none;
+  /* 消除安卓点击高亮 */
+  -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+}
+
+/* 默认跟随系统深浅色 */
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme]) {
+    color-scheme: dark;
+  }
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  /* 300ms 点击延迟在移动端手感很差 */
+  touch-action: manipulation;
+}
+
+button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  /* 触摸目标 ≥48dp；小图标用负 margin + padding 扩展热区 */
+  min-height: 48px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+a {
+  color: var(--brand);
+  text-decoration: none;
+}
+
+/* 可见焦点环（仅键盘） */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+/* 数字用等宽字形：倒计时跳动时不会左右抖动 */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* ---- 排版工具类 ---- */
+.t-display {
+  font-size: var(--t-display-size);
+  line-height: var(--t-display-line);
+  font-weight: var(--t-display-weight);
+  letter-spacing: -0.02em;
+}
+.t-title {
+  font-size: var(--t-title-size);
+  line-height: var(--t-title-line);
+  font-weight: var(--t-title-weight);
+  letter-spacing: -0.01em;
+}
+.t-head {
+  font-size: var(--t-head-size);
+  line-height: var(--t-head-line);
+  font-weight: var(--t-head-weight);
+}
+.t-body {
+  font-size: var(--t-body-size);
+  line-height: var(--t-body-line);
+}
+.t-label {
+  font-size: var(--t-label-size);
+  line-height: var(--t-label-line);
+  font-weight: var(--t-label-weight);
+}
+.t-cap {
+  font-size: var(--t-cap-size);
+  line-height: var(--t-cap-line);
+  font-weight: var(--t-cap-weight);
+  letter-spacing: var(--t-cap-tracking);
+}
+
+.t-2 {
+  color: var(--text-2);
+}
+.t-3 {
+  color: var(--text-3);
+}
+
+/* ---- 布局工具类 ---- */
+.row {
+  display: flex;
+  align-items: center;
+}
+.col {
+  display: flex;
+  flex-direction: column;
+}
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+.gap-1 {
+  gap: var(--space-1);
+}
+.gap-2 {
+  gap: var(--space-2);
+}
+.gap-3 {
+  gap: var(--space-3);
+}
+.gap-4 {
+  gap: var(--space-4);
+}
+
+/* 文本截断 */
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 滚动容器：惯性滚动 + 隐藏滚动条 */
+.scroll {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* ---- 全局状态页（空 / 错误 / 加载）---- */
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-8) var(--space-6);
+  text-align: center;
+  color: var(--text-2);
+}
+.state__icon {
+  color: var(--text-3);
+}
+.state__title {
+  font-size: var(--t-head-size);
+  line-height: var(--t-head-line);
+  font-weight: var(--t-head-weight);
+  color: var(--text);
+}
+
+/* ---- 骨架屏 ---- */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 0%,
+    var(--surface-3) 50%,
+    var(--surface-2) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  border-radius: var(--r-sm);
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* ---- 实时脉冲（车辆位置点）---- */
+@keyframes live-pulse {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.7;
+  }
+  70% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+.live-pulse {
+  transform-origin: center;
+  animation: live-pulse 2s ease-out infinite;
+}
+
+/* 减少动态时：脉冲改为静态双层圆环，不闪烁 */
+@media (prefers-reduced-motion: reduce) {
+  .live-pulse {
+    animation: none;
+    opacity: 0.28;
+    transform: scale(1.5);
+  }
+  .skeleton {
+    animation: none;
+  }
+}
+
+/* ---- 毛玻璃（严格限定使用场景）---- */
+.glass {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+}

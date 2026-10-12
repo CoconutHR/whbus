@@ -1,0 +1,10 @@
+# pnpm 设置文件。
+#
+# 为什么需要它：pnpm 10+ 默认不执行依赖的 postinstall 脚本（供应链安全），
+# 但 esbuild 需要执行 install.js 来落地原生二进制。不显式放行的话，
+# `pnpm install` 会以 ERR_PNPM_IGNORED_BUILDS、退出码 1 结束，
+# 从而让 CI 里的 `pnpm install` 直接失败。
+#
+# 只放行 esbuild，不用 dangerouslyAllowAllBuilds。
+allowBuilds:
+  esbuild: true

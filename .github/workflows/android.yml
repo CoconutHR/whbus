@@ -1,0 +1,146 @@
+# 云端编译安卓 APK。
+#
+# 为什么全部放在 CI：安卓交叉编译需要 JDK + Android SDK + NDK + 4 个 Rust 目标，
+# 本地配齐要 3-5 GB。公开仓库的 GitHub Actions 分钟数免费，
+# 因此本地只需要 Node 和 Rust 就能开发，重活交给这里。
+#
+# 产物是 **debug APK，无需任何签名密钥**：AGP 会自动用 runner 上的
+# debug.keystore 签名，可直接侧载安装。（release APK 才需要签名密钥，
+# 届时再加 ANDROID_KEY_* 三个 secret。）
+
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# 同一分支的旧构建自动取消，省 CI 时间
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 快速校验：类型检查 + Rust 单测。失败就不必浪费 10 分钟去编 APK。
+  # ---------------------------------------------------------------------------
+  check:
+    name: 类型检查与单测
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: pnpm
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: TypeScript typecheck
+        run: pnpm typecheck
+
+      - name: Frontend build
+        run: pnpm build
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ./src-tauri -> target
+          # 缓存损坏会导致 "could not compile wry"，这是已知偶发问题；
+          # 换 key 前缀即可重置缓存。
+          prefix-key: v1-rust
+          cache-on-failure: true
+
+      # Rust 单测覆盖 SM4 解密、坐标转换偏移量、ETA 区间、收班判定等
+      # 关键逻辑——这些是本项目最容易出错、也最该被守住的部分。
+      - name: Rust unit tests
+        working-directory: src-tauri
+        run: cargo test --lib --verbose
+
+  # ---------------------------------------------------------------------------
+  # 安卓构建
+  # ---------------------------------------------------------------------------
+  android:
+    name: 安卓 debug APK
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: pnpm
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Rust stable + Android targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ./src-tauri -> target
+          prefix-key: v1-rust-android
+          cache-on-failure: true
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          java-version: "21"
+          distribution: temurin
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      # NDK 必须用 **发布名**（r29），不能写数字版本——
+      # setup-ndk 会拼 https://dl.google.com/.../android-ndk-${version}-linux.zip，
+      # 传 29.0.13846066 会 404。
+      - name: Set up Android NDK
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r29
+          link-to-sdk: true
+
+      # 只有单个 ABI 用于日常侧载，构建时间几乎减半。
+      # 需要给其他架构出包时把 target 去掉即可。
+      - name: Build Android APK (debug)
+        uses: tauri-apps/tauri-action@v1
+        env:
+          # 必填：不设的话 Tauri 会扫描 $ANDROID_HOME/ndk 并取**排序最后一个**
+          # （runner 上同时存在 27/29/30 三个 NDK，会选中 30）。
+          NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        with:
+          mobile: android
+          args: --apk --debug --target aarch64
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: whbus-android-debug-arm64
+          path: src-tauri/gen/android/app/build/outputs/apk/arm64/debug/app-arm64-debug.apk
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,117 @@
+.lines__search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  height: 46px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  margin-bottom: var(--space-2);
+}
+
+.lines__search:focus-within {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+
+.lines__search-icon {
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
+.lines__input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: var(--t-body-size);
+  /* 输入框内允许选中与长按 */
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.lines__input::placeholder {
+  color: var(--text-3);
+}
+
+.lines__clear {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text-3);
+  font-size: 18px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* ---------------------------------------------------------------- 站点结果 */
+
+.lines__stop {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+
+.lines__stop-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--text-2);
+  flex-shrink: 0;
+}
+
+/* ---------------------------------------------------------------- 线路结果 */
+
+.lines__line {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  transition: transform var(--dur-press) var(--ease-out);
+}
+
+.lines__line:active {
+  transform: scale(0.985);
+}
+
+.lines__line-bar {
+  width: 3px;
+  align-self: stretch;
+  flex-shrink: 0;
+}
+
+.lines__line .list__grow {
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+}
+
+.lines__line > svg {
+  margin-right: var(--space-4);
+}
+
+.lines__line-no {
+  font-size: var(--t-head-size);
+  line-height: var(--t-head-line);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}

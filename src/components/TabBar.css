@@ -1,0 +1,48 @@
+.tabbar {
+  display: flex;
+  align-items: stretch;
+  height: var(--tabbar-h);
+  /* 手势条安全区：导航栏本身要吃掉这段高度，内容才不被遮挡 */
+  padding-bottom: var(--safe-bottom);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  z-index: var(--z-tabbar);
+}
+
+.tabbar__item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 48px;
+  color: var(--text-3);
+  transition: color var(--dur-fast) var(--ease-out);
+  /* 按压态不改变布局边界，只改透明度与缩放 */
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tabbar__item[aria-selected="true"] {
+  color: var(--brand);
+}
+
+.tabbar__item:active {
+  opacity: 0.62;
+}
+
+.tabbar__icon {
+  display: flex;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.tabbar__item[aria-selected="true"] .tabbar__icon {
+  transform: translateY(-1px);
+}
+
+.tabbar__label {
+  font-size: var(--t-cap-size);
+  line-height: var(--t-cap-line);
+  font-weight: var(--t-cap-weight);
+  letter-spacing: var(--t-cap-tracking);
+}

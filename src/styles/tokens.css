@@ -1,0 +1,267 @@
+/* ==========================================================================
+   whbus 设计令牌
+   --------------------------------------------------------------------------
+   风格定位：现代且效率、小而美。
+   - 圆角比常规小一档（卡片 18px），超过 24px 会立刻显得软糯
+   - 分层主要靠 1px 描边而非阴影，阴影只留给"浮在内容之上"的元素
+   - 毛玻璃只允许出现在 3 处：底部导航 / 决策卡 / 吸顶头部
+   - 颜色语义化，禁止逐屏硬编码 hex
+
+   深浅双主题：由 <html data-theme="light|dark"> 驱动，
+   缺省跟随系统（见 global.css）。
+   ========================================================================== */
+
+:root {
+  /* ---- 圆角刻度 ---- */
+  --r-xs: 6px; /* 标签 / 小 chip */
+  --r-sm: 10px; /* 按钮、输入框、图标容器 */
+  --r-md: 14px; /* 列表项、内嵌块 */
+  --r-lg: 18px; /* 卡片 */
+  --r-xl: 22px; /* 底部导航、抽屉 */
+  --r-full: 999px; /* 胶囊 chip */
+
+  /* ---- 间距（4/8dp 节奏）---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 48px;
+
+  /* ---- 字体 ---- */
+  /* 使用系统字体：零网络依赖、零闪字（FOUT）。
+     安卓上即 Roboto + Noto Sans CJK，中文渲染质量最佳。 */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans CJK SC",
+    "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-num: ui-monospace, "Roboto Mono", "SF Mono", Menlo, Consolas, monospace;
+
+  /* 字号/行高/字重 */
+  --t-display-size: 34px;
+  --t-display-line: 38px;
+  --t-display-weight: 700;
+  --t-title-size: 22px;
+  --t-title-line: 28px;
+  --t-title-weight: 650;
+  --t-head-size: 17px;
+  --t-head-line: 24px;
+  --t-head-weight: 600;
+  --t-body-size: 15px;
+  --t-body-line: 22px;
+  --t-body-weight: 450;
+  --t-label-size: 13px;
+  --t-label-line: 18px;
+  --t-label-weight: 550;
+  --t-cap-size: 11.5px;
+  --t-cap-line: 16px;
+  --t-cap-weight: 550;
+  --t-cap-tracking: 0.02em;
+
+  /* ---- 动效 ---- */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-press: 90ms;
+  --dur-fast: 180ms;
+  --dur-base: 260ms;
+  --dur-enter: 320ms;
+
+  /* ---- 层级 ---- */
+  --z-sticky: 10;
+  --z-tabbar: 40;
+  --z-sheet: 60;
+  --z-toast: 80;
+
+  /* ---- 布局 ---- */
+  --tabbar-h: 56px;
+  --header-h: 52px;
+  --page-pad: 16px;
+
+  /* ---- 安全区（安卓 WebView 支持不稳定，由 Kotlin 侧兜底写入）---- */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+/* ==========================================================================
+   浅色主题
+   ========================================================================== */
+:root,
+[data-theme="light"] {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f1f3f7;
+  --surface-3: #e8ebf0;
+  --border: #e4e7ec;
+  --border-strong: #d3d8e0;
+
+  --text: #0f1115;
+  --text-2: #5c6470; /* 4.8:1 ✓ */
+  --text-3: #8a929e; /* 仅用于 ≥14px 的辅助文字 */
+
+  --brand: #2563eb;
+  --brand-fg: #ffffff;
+  --brand-soft: rgba(37, 99, 235, 0.1);
+  --brand-soft-strong: rgba(37, 99, 235, 0.16);
+
+  --accent: #f97316; /* 出发 CTA / 紧迫提醒，全屏唯一 */
+  --accent-fg: #ffffff;
+  --accent-soft: rgba(249, 115, 22, 0.12);
+
+  --live: #10b981; /* 实时位置脉冲点 */
+  --live-soft: rgba(16, 185, 129, 0.14);
+
+  --warn: #f59e0b;
+  --warn-soft: rgba(245, 158, 11, 0.14);
+  --danger: #dc2626;
+  --danger-soft: rgba(220, 38, 38, 0.12);
+
+  /* 毛玻璃 */
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.6);
+  --glass-scrim: rgba(15, 17, 21, 0.45);
+
+  /* 浮起元素的轻阴影（唯一允许用阴影的地方） */
+  --shadow-float: 0 6px 24px rgba(15, 17, 21, 0.1);
+  --shadow-sheet: 0 -8px 32px rgba(15, 17, 21, 0.14);
+
+  color-scheme: light;
+}
+
+/* ==========================================================================
+   深色主题
+   ========================================================================== */
+[data-theme="dark"] {
+  --bg: #0b0d10;
+  --surface: #14171c;
+  --surface-2: #1b1f26;
+  --surface-3: #232830;
+  --border: #262b33; /* 深色下描边必须独立验证可见性 */
+  --border-strong: #333a44;
+
+  --text: #edeff3;
+  --text-2: #9ba3af; /* 3.9:1 ✓ */
+  --text-3: #6f7885;
+
+  --brand: #3b82f6; /* 深色下蓝色提亮 */
+  --brand-fg: #0b0d10;
+  --brand-soft: rgba(59, 130, 246, 0.16);
+  --brand-soft-strong: rgba(59, 130, 246, 0.24);
+
+  --accent: #fb923c; /* 深色下橙色提亮 */
+  --accent-fg: #1a0f04;
+  --accent-soft: rgba(251, 146, 60, 0.16);
+
+  --live: #34d399;
+  --live-soft: rgba(52, 211, 153, 0.18);
+
+  --warn: #fbbf24;
+  --warn-soft: rgba(251, 191, 36, 0.16);
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.16);
+
+  --glass-bg: rgba(20, 23, 28, 0.74);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-scrim: rgba(0, 0, 0, 0.6);
+
+  --shadow-float: 0 6px 24px rgba(0, 0, 0, 0.45);
+  --shadow-sheet: 0 -8px 32px rgba(0, 0, 0, 0.5);
+
+  color-scheme: dark;
+}
+
+/* ==========================================================================
+   线路色 —— 重要设计决策
+   --------------------------------------------------------------------------
+   上游 API 不提供线路品牌色。即便将来提供，也不能把线路色直接当文字色：
+   黄色线路 #F5C518 配白字完全不可读。
+
+   统一规则：线路色只用于
+     ① 卡片左侧 3px 色条
+     ② chip 背景（该色 12% 透明度）
+     ③ 深色系的文字/图标
+   这样任何线路色都安全，且视觉上自成体系。
+   ========================================================================== */
+:root {
+  --line-1: #2563eb;
+  --line-2: #0891b2;
+  --line-3: #7c3aed;
+  --line-4: #db2777;
+  --line-5: #ea580c;
+  --line-6: #16a34a;
+  --line-7: #ca8a04;
+  --line-8: #0d9488;
+  --line-default: #64748b;
+}
+
+[data-theme="dark"] {
+  --line-1: #60a5fa;
+  --line-2: #22d3ee;
+  --line-3: #a78bfa;
+  --line-4: #f472b6;
+  --line-5: #fb923c;
+  --line-6: #4ade80;
+  --line-7: #facc15;
+  --line-8: #2dd4bf;
+  --line-default: #94a3b8;
+}
+
+/* ==========================================================================
+   数据可信度可视化 —— 虚实 / 透明度的唯一来源
+   --------------------------------------------------------------------------
+   用户明确要求：推测位置用虚线，真实位置用实线。
+   这里把"可信度 → 视觉"的映射集中定义，避免各处各写一套。
+   ========================================================================== */
+:root {
+  /* 真实 GPS（< 3 分钟）：实线、不透明 */
+  --pos-live-style: solid;
+  --pos-live-opacity: 1;
+  --pos-live-color: var(--brand);
+
+  /* 数据偏旧（3-10 分钟）：实线、降饱和 */
+  --pos-delayed-style: solid;
+  --pos-delayed-opacity: 0.72;
+  --pos-delayed-color: var(--warn);
+
+  /* 历史推测：虚线、半透明 —— 必须配"推测"角标 */
+  --pos-inferred-style: dashed;
+  --pos-inferred-opacity: 0.55;
+  --pos-inferred-color: var(--text-3);
+
+  /* 不可用 */
+  --pos-stale-style: dotted;
+  --pos-stale-opacity: 0.35;
+  --pos-stale-color: var(--text-3);
+
+  --dash-inferred: 5 4; /* stroke-dasharray：推测 */
+  --dash-stale: 2 4; /* stroke-dasharray：不可用 */
+}
+
+/* ==========================================================================
+   降级：不支持 backdrop-filter 时退化为近乎不透明的实色
+   --------------------------------------------------------------------------
+   安卓 WebView 对 backdrop-filter 的支持依赖底层 Chromium 版本，
+   低端机还有掉帧风险。降级后视觉几乎无损。
+   ========================================================================== */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root,
+  [data-theme="light"] {
+    --glass-bg: rgba(255, 255, 255, 0.96);
+  }
+  [data-theme="dark"] {
+    --glass-bg: rgba(20, 23, 28, 0.96);
+  }
+}
+
+/* ==========================================================================
+   无障碍：尊重系统"减少动态效果"
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-press: 0ms;
+    --dur-fast: 0ms;
+    --dur-base: 0ms;
+    --dur-enter: 0ms;
+  }
+}

@@ -1,0 +1,38 @@
+.stop-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 64px;
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  transition: transform var(--dur-press) var(--ease-out);
+}
+
+.stop-row:active {
+  transform: scale(0.985);
+}
+
+.stop-row__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: var(--r-sm);
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.home__footnote {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  justify-content: center;
+  text-align: center;
+  padding-top: var(--space-4);
+}

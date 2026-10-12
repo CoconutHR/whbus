@@ -1,0 +1,74 @@
+.timeline {
+  position: relative;
+  width: 100%;
+}
+
+.timeline__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+/* 车辆脉冲：位置在 SVG 内，用 CSS 动画作用于 r 属性会失效，
+   因此用 transform + transform-box 在元素自身坐标系里缩放 */
+.timeline__pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: timeline-pulse 2.2s ease-out infinite;
+}
+
+@keyframes timeline-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  70% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timeline__pulse {
+    animation: none;
+    opacity: 0.22;
+    transform: scale(2);
+  }
+}
+
+/* 站点点击热区：让细节模式下的刻度可点，但热区足够大 */
+.timeline__hit {
+  position: absolute;
+  inset: 0;
+}
+
+.timeline__hit-item {
+  position: absolute;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  transform: translate(-50%, -50%);
+  border-radius: var(--r-full);
+  background: transparent;
+}
+
+/* ---------------------------------------------------------------- 图例 */
+
+.timeline-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.timeline-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}

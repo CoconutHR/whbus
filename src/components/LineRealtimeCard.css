@@ -1,0 +1,75 @@
+.lrc {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  transition: transform var(--dur-press) var(--ease-out);
+}
+
+.lrc:active {
+  transform: scale(0.985);
+}
+
+/* 线路色的唯一大面积用法：左侧 3px 色条 */
+.lrc__bar {
+  width: 3px;
+  flex-shrink: 0;
+}
+
+.lrc__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+}
+
+.lrc__row1 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.lrc__no {
+  font-size: var(--t-head-size);
+  line-height: var(--t-head-line);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  flex-shrink: 0;
+}
+
+.lrc__row2 {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* ETA 是卡片的视觉主角 */
+.lrc__eta {
+  font-size: 26px;
+  line-height: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--brand);
+}
+
+.lrc__timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lrc__legend {
+  display: block;
+}

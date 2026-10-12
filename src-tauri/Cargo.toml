@@ -1,0 +1,55 @@
+[package]
+name = "whbus"
+version = "0.1.0"
+description = "武汉公交实时通勤助手"
+authors = ["CoconutHR"]
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "whbus_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7.2", features = [] }
+
+[dependencies]
+tauri = { version = "2.12.3", features = [] }
+tauri-plugin-opener = "2.7.1"
+tauri-plugin-store = "2.5.0"
+tauri-plugin-haptics = "2.4.2"
+tauri-plugin-notification = "2.6.0"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+log = "0.4"
+
+# SM4-ECB + PKCS#7 —— 公交 API 的加密层（RustCrypto）
+# 注意：sm4 0.6 只提供**裸分组密码** `Sm4`，ECB 模式需自行按 16 字节分组循环，
+# 填充也自行处理，因此这里不需要 cipher 的 block-padding feature。
+sm4 = "0.6.0"
+cipher = "0.5"
+hex = "0.4"
+
+# HTTPS 客户端（rustls，不依赖系统 OpenSSL，安卓交叉编译友好）
+reqwest = { version = "0.12", default-features = false, features = [
+    "json",
+    "rustls-tls",
+] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+# geolocation 仅移动端可用（桌面端返回 0,0）
+[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
+tauri-plugin-geolocation = "2.4.2"
+
+[features]
+# 默认走 CI；本地桌面调试时用 custom-protocol
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

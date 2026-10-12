@@ -1,0 +1,235 @@
+/* ==========================================================================
+   通用 UI 组件样式
+   分层主要靠 1px 描边；阴影只留给"浮在内容之上"的元素。
+   ========================================================================== */
+
+/* ---------------------------------------------------------------- 卡片 */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--space-4);
+}
+
+/* 唯一允许带阴影的卡片：首页决策卡（它需要建立悬浮层级） */
+.card--raised {
+  box-shadow: var(--shadow-float);
+  border-color: transparent;
+}
+
+.card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.card__title {
+  font-size: var(--t-head-size);
+  line-height: var(--t-head-line);
+  font-weight: var(--t-head-weight);
+}
+
+/* ---------------------------------------------------------------- 按钮 */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding: 0 var(--space-5);
+  border-radius: var(--r-sm);
+  font-size: var(--t-label-size);
+  line-height: var(--t-label-line);
+  font-weight: 600;
+  transition:
+    transform var(--dur-press) var(--ease-out),
+    opacity var(--dur-press) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.975);
+}
+
+.btn--primary {
+  background: var(--brand);
+  color: var(--brand-fg);
+}
+
+/* 琥珀橙只用于"该出发了"这类时间紧迫的 CTA，全屏唯一 */
+.btn--accent {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+.btn--ghost {
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn--quiet {
+  background: transparent;
+  color: var(--text-2);
+}
+
+.btn--block {
+  width: 100%;
+}
+
+.btn--sm {
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  font-size: var(--t-cap-size);
+}
+
+/* ---------------------------------------------------------------- 胶囊标签 */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 3px var(--space-2);
+  border-radius: var(--r-full);
+  font-size: var(--t-cap-size);
+  line-height: var(--t-cap-line);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.chip--neutral {
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+.chip--brand {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+.chip--accent {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.chip--live {
+  background: var(--live-soft);
+  color: var(--live);
+}
+.chip--warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.chip--danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* 线路号胶囊：左侧色点 + 中性底，任何线路色都安全 */
+.line-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px var(--space-2);
+  border-radius: var(--r-xs);
+  background: var(--surface-2);
+  font-size: var(--t-label-size);
+  line-height: var(--t-label-line);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.line-badge__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  background: var(--line-default);
+}
+
+/* ---------------------------------------------------------------- 提示条 */
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--r-sm);
+  font-size: var(--t-cap-size);
+  line-height: var(--t-cap-line);
+  font-weight: 550;
+}
+
+.notice--warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.notice--info {
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+.notice--danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* ---------------------------------------------------------------- 分段控件 */
+
+.segmented {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+
+.segmented__item {
+  flex: 1;
+  min-height: 34px;
+  border-radius: 8px;
+  font-size: var(--t-cap-size);
+  line-height: var(--t-cap-line);
+  font-weight: 600;
+  color: var(--text-2);
+  transition: all var(--dur-fast) var(--ease-out);
+}
+
+.segmented__item[aria-selected="true"] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+/* ---------------------------------------------------------------- 列表 */
+
+.list {
+  display: flex;
+  flex-direction: column;
+}
+
+.list__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 60px;
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.list__item:last-child {
+  border-bottom: none;
+}
+
+.list__item:active {
+  background: var(--surface-2);
+}
+
+.list__grow {
+  flex: 1;
+  min-width: 0;
+}

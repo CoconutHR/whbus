@@ -1,0 +1,109 @@
+.plan__od {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-3);
+}
+
+/* 起终点用一条竖轨连起来，比两个输入框更能表达"从 A 到 B" */
+.plan__od-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 14px;
+  padding-top: 9px;
+  flex-shrink: 0;
+}
+
+.plan__od-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.plan__od-dot--from {
+  background: var(--brand);
+}
+
+.plan__od-dot--to {
+  background: var(--accent);
+}
+
+.plan__od-line {
+  flex: 1;
+  width: 2px;
+  margin: 4px 0;
+  background: var(--border-strong);
+  border-radius: 1px;
+}
+
+.plan__od-fields {
+  flex: 1;
+  min-width: 0;
+}
+
+.plan__od-field {
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.plan__od-field--last {
+  border-bottom: none;
+}
+
+.plan__swap {
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  align-self: center;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--text-2);
+  flex-shrink: 0;
+}
+
+.plan__swap:active {
+  transform: scale(0.94);
+}
+
+/* ---------------------------------------------------------------- 地点行 */
+
+.place-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--surface-2);
+  border-radius: var(--r-md);
+}
+
+.place-row--compact {
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.place-row__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--brand);
+}
+
+.place-row--compact .place-row__icon {
+  background: var(--surface-2);
+}
+
+.plan__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-6) 0 var(--space-2);
+}

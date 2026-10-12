@@ -1,0 +1,33 @@
+# ---- Rust / Tauri ----
+/src-tauri/target
+/src-tauri/gen/schemas
+/src-tauri/gen/android
+/src-tauri/gen/apple
+
+# ---- Node ----
+node_modules
+dist
+dist-ssr
+*.local
+
+# ---- 构建产物 ----
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# ---- 编辑器 ----
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ---- 环境变量 ----
+.env
+.env.local
+.env.*.local

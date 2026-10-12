@@ -1,0 +1,137 @@
+.ldv {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg);
+}
+
+/* 吸顶头部：毛玻璃的合法使用场景之一 */
+.ldv__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--header-h);
+  flex-shrink: 0;
+  padding: 0 var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.ldv__back,
+.ldv__fav {
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  flex-shrink: 0;
+  border-radius: var(--r-sm);
+  color: var(--text-2);
+}
+
+.ldv__fav[aria-pressed="true"] {
+  color: var(--accent);
+}
+
+.ldv__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: var(--space-7);
+}
+
+.ldv__pad {
+  padding: var(--space-3) var(--page-pad) 0;
+}
+
+.ldv__big {
+  font-size: 30px;
+  line-height: 34px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--brand);
+}
+
+/* ---------------------------------------------------------------- 站点列表 */
+
+.ldv__stops {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--space-2) 0;
+  overflow: hidden;
+}
+
+.ldv__stop {
+  display: flex;
+  gap: var(--space-3);
+  padding: 0 var(--space-4);
+  min-height: 54px;
+}
+
+/* 已过站：降饱和 + 缩小字号，但**不删除** —— 用户要靠它确认车确实已经过站 */
+.ldv__stop--passed .t-head {
+  color: var(--text-3);
+  font-weight: 500;
+}
+
+.ldv__rail {
+  position: relative;
+  width: 14px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.ldv__dot {
+  position: absolute;
+  top: 20px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2.4px solid var(--brand);
+  z-index: 1;
+}
+
+.ldv__dot--passed {
+  background: var(--border-strong);
+  border-color: var(--border-strong);
+}
+
+.ldv__line {
+  position: absolute;
+  top: 30px;
+  bottom: -14px;
+  width: 2px;
+  background: var(--border-strong);
+  border-radius: 1px;
+}
+
+.ldv__stop-body {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-3) 0;
+}
+
+.ldv__subway {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: var(--r-xs);
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: var(--t-cap-size);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.ldv__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  justify-content: center;
+  padding: var(--space-5) var(--page-pad) 0;
+  text-align: center;
+}
