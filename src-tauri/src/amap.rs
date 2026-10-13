@@ -72,8 +72,6 @@ struct AmapEnvelope<T> {
     geocodes: Option<Vec<GeocodeItem>>,
     #[serde(default)]
     pois: Option<Vec<PoiItem>>,
-    #[serde(default)]
-    count: Option<String>,
 }
 
 impl<T> AmapEnvelope<T> {

@@ -31,3 +31,7 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+
+# 开发期的临时探测脚本（联调用，不入库）
+/_probe/
+

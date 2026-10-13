@@ -1,0 +1,1002 @@
+{
+ "_note": "真实数据 fixture，由 _probe/export_fixture.py 生成。坐标均为 GCJ-02。用于 journey.rs 的集成测试。",
+ "_origin": {
+  "name": "家 楚天·雅苑",
+  "lng": 114.295109,
+  "lat": 30.49237
+ },
+ "_dest": {
+  "name": "公司 洪山科创大厦",
+  "lng": 114.334903,
+  "lat": 30.502804
+ },
+ "originStops": [
+  {
+   "stopId": "8A2C5A614C4C07C06667E969C41DD33F",
+   "stopName": "烽胜路复地悦城(东行)",
+   "lng": 114.292979,
+   "lat": 30.490851,
+   "lineNames": [
+    "399",
+    "632",
+    "636",
+    "687"
+   ]
+  },
+  {
+   "stopId": "AFADF5D36A54F0E3595280E0E0EE57EB",
+   "stopName": "烽胜路复地悦城(北行)",
+   "lng": 114.292979,
+   "lat": 30.490851,
+   "lineNames": [
+    "399",
+    "632",
+    "636",
+    "687"
+   ]
+  },
+  {
+   "stopId": "30201BE24D7F00F029001B12369B44C0",
+   "stopName": "烽胜路地铁张家湾(东行)",
+   "lng": 114.293789185938,
+   "lat": 30.496393468946,
+   "lineNames": [
+    "399",
+    "632",
+    "636",
+    "687"
+   ]
+  },
+  {
+   "stopId": "1B2E2C8CA4CAFA8938EB9B2D7F7E662F",
+   "stopName": "烽胜路楚祥大道口(北行)",
+   "lng": 114.293025,
+   "lat": 30.488337,
+   "lineNames": [
+    "399",
+    "632",
+    "636",
+    "687"
+   ]
+  },
+  {
+   "stopId": "D45C1400FA29D1060FFB414661CADF04",
+   "stopName": "烽胜路楚祥大道口(东行)",
+   "lng": 114.293025,
+   "lat": 30.488337,
+   "lineNames": [
+    "399",
+    "632",
+    "636",
+    "687"
+   ]
+  }
+ ],
+ "destStops": [
+  {
+   "stopId": "173952126673493994",
+   "stopName": "文治街书城路口(东行)",
+   "lng": 114.336277,
+   "lat": 30.501471,
+   "lineNames": [
+    "804",
+    "817"
+   ]
+  },
+  {
+   "stopId": "173952126693798666",
+   "stopName": "文治街书城路口(西行)",
+   "lng": 114.336277,
+   "lat": 30.501471,
+   "lineNames": [
+    "804",
+    "817"
+   ]
+  },
+  {
+   "stopId": "02C2D1F2CC0BC48731E9135BD25E7FD5",
+   "stopName": "书城路文治街(北行)",
+   "lng": 114.337398,
+   "lat": 30.501971,
+   "lineNames": [
+    "625",
+    "797",
+    "804",
+    "817",
+    "908"
+   ]
+  },
+  {
+   "stopId": "026C61F4827B1C8C3C86E564E4E4CD26",
+   "stopName": "书城路文治街(东行)",
+   "lng": 114.337398,
+   "lat": 30.501971,
+   "lineNames": [
+    "625",
+    "797",
+    "804",
+    "817",
+    "908"
+   ]
+  },
+  {
+   "stopId": "172382520856173802",
+   "stopName": "文治街金地格林小城(西行)",
+   "lng": 114.331133,
+   "lat": 30.50301,
+   "lineNames": [
+    "804",
+    "817"
+   ]
+  }
+ ],
+ "lines": {
+  "687": [
+   {
+    "lineId": "420100-687-0",
+    "lineName": "687",
+    "startStop": "丁字桥南路南湖大道",
+    "endStop": "小黄家湖路白沙路",
+    "earlyHour": "06:00",
+    "lastHour": "20:30",
+    "price": "2",
+    "stops": [
+     {
+      "stopNo": 1,
+      "stopId": "7DC7735BFC5EC38AE4BC8C072F3E7A5D",
+      "stopName": "丁字桥南路南湖大道",
+      "lng": 114.32599,
+      "lat": 30.482331
+     },
+     {
+      "stopNo": 2,
+      "stopId": "729157A28A4042483140FD2C8A1B87DC",
+      "stopName": "丁字桥南路楚祥大道",
+      "lng": 114.326105,
+      "lat": 30.485791
+     },
+     {
+      "stopNo": 3,
+      "stopId": "18FA2B8126B2B28B84E8C270117017CB",
+      "stopName": "丁字桥南路华中师范附属小学",
+      "lng": 114.325809,
+      "lat": 30.488498
+     },
+     {
+      "stopNo": 4,
+      "stopId": "0CFC2DF71BF511E20C8AA4CB537FEC03",
+      "stopName": "丁字桥南路文馨街",
+      "lng": 114.325603,
+      "lat": 30.495493
+     },
+     {
+      "stopNo": 5,
+      "stopId": "5B106C8BFAF4D46405D2706808405C02",
+      "stopName": "丁字桥南路富安街",
+      "lng": 114.325538,
+      "lat": 30.499553
+     },
+     {
+      "stopNo": 6,
+      "stopId": "1A431AC33C523A753D79A587ABE1F817",
+      "stopName": "丁字桥南路建安街",
+      "lng": 114.325538,
+      "lat": 30.501935
+     },
+     {
+      "stopNo": 7,
+      "stopId": "0FBA7951A7F0A80D4CB786113143A14E",
+      "stopName": "建安街丁字桥南路",
+      "lng": 114.323432,
+      "lat": 30.504294
+     },
+     {
+      "stopNo": 8,
+      "stopId": "852B5F576DF8972903107051A708040D",
+      "stopName": "建安街平安路",
+      "lng": 114.319117,
+      "lat": 30.50431
+     },
+     {
+      "stopNo": 9,
+      "stopId": "EC17790C4526835777CA42DF258E2ED9",
+      "stopName": "恒安路地铁建安街站",
+      "lng": 114.313694,
+      "lat": 30.503437
+     },
+     {
+      "stopNo": 10,
+      "stopId": "DA6BD366833FF73BD6F1F34C806D05E7",
+      "stopName": "南李路武梁路",
+      "lng": 114.314688,
+      "lat": 30.498108
+     },
+     {
+      "stopNo": 11,
+      "stopId": "039A30FC8F7A63120C7B0786A62AC1E3",
+      "stopName": "武梁路新千家街",
+      "lng": 114.312499,
+      "lat": 30.497224
+     },
+     {
+      "stopNo": 12,
+      "stopId": "3ABBA16D84CABB2582431666CEB3AA09",
+      "stopName": "武梁路巡司河东路口",
+      "lng": 114.307153,
+      "lat": 30.497698
+     },
+     {
+      "stopNo": 13,
+      "stopId": "176598786196003058",
+      "stopName": "武梁路青菱中路",
+      "lng": 114.293339,
+      "lat": 30.495483
+     },
+     {
+      "stopNo": 14,
+      "stopId": "40D382D7755CEDC01A11AC6C24633DE9",
+      "stopName": "烽胜路地铁张家湾",
+      "lng": 114.292979,
+      "lat": 30.490851
+     },
+     {
+      "stopNo": 15,
+      "stopId": "AFADF5D36A54F0E3595280E0E0EE57EB",
+      "stopName": "烽胜路复地悦城",
+      "lng": 114.292979,
+      "lat": 30.490851
+     },
+     {
+      "stopNo": 16,
+      "stopId": "1B2E2C8CA4CAFA8938EB9B2D7F7E662F",
+      "stopName": "烽胜路楚祥大道口",
+      "lng": 114.293025,
+      "lat": 30.488337
+     },
+     {
+      "stopNo": 17,
+      "stopId": "3E1E5E04BD702F25A6F9CEE1B6E5B7F0",
+      "stopName": "烽胜路邬家墩",
+      "lng": 114.29295,
+      "lat": 30.484756
+     },
+     {
+      "stopNo": 18,
+      "stopId": "5D9B34DFBE8EEE992DE3FA770ACE9E49",
+      "stopName": "烽胜路金域天下",
+      "lng": 114.293128,
+      "lat": 30.481123
+     },
+     {
+      "stopNo": 19,
+      "stopId": "82226204622D0EC4608EB885D18EF276",
+      "stopName": "烽胜路地铁光霞",
+      "lng": 114.293232,
+      "lat": 30.47539
+     },
+     {
+      "stopNo": 20,
+      "stopId": "F8211EA16AFBA4881405EBDD01E9CF2D",
+      "stopName": "烽胜路清能清江锦城",
+      "lng": 114.293232,
+      "lat": 30.47539
+     },
+     {
+      "stopNo": 21,
+      "stopId": "0A0722AD08A43422ABB8C368A9AF424B",
+      "stopName": "白沙四路烽胜路",
+      "lng": 114.292483,
+      "lat": 30.473306
+     },
+     {
+      "stopNo": 22,
+      "stopId": "5EB2B2CC0E31FF0FAF639540F79EC22C",
+      "stopName": "光霞路白沙四路",
+      "lng": 114.284442,
+      "lat": 30.477715
+     },
+     {
+      "stopNo": 23,
+      "stopId": "8E7CEAFACAEBCB869AE06900E4C1DDEE",
+      "stopName": "白沙三路光霞路口",
+      "lng": 114.284442,
+      "lat": 30.477715
+     },
+     {
+      "stopNo": 24,
+      "stopId": "700BACEB43B9FC50A357BC5DCB9DA94A",
+      "stopName": "白沙三路白沙小路",
+      "lng": 114.280511,
+      "lat": 30.477905
+     },
+     {
+      "stopNo": 25,
+      "stopId": "1AF3D7073B9B83B17ED3A5A7EDB1C1A2",
+      "stopName": "白沙四路华润紫云府",
+      "lng": 114.279089,
+      "lat": 30.473979
+     },
+     {
+      "stopNo": 26,
+      "stopId": "1712FC9BEEA69C5DF570B7E88080B142",
+      "stopName": "光霞西路白沙六路",
+      "lng": 114.275296,
+      "lat": 30.468679
+     }
+    ]
+   },
+   {
+    "lineId": "420100-687-1",
+    "lineName": "687",
+    "startStop": "小黄家湖路白沙路",
+    "endStop": "马湖公交停车场",
+    "earlyHour": "06:40",
+    "lastHour": "21:15",
+    "price": "2",
+    "stops": [
+     {
+      "stopNo": 1,
+      "stopId": "02F37F14D22420BDB82798AB4B395023",
+      "stopName": "小黄家湖路白沙路",
+      "lng": 114.274855,
+      "lat": 30.468876
+     },
+     {
+      "stopNo": 2,
+      "stopId": "E0CD8F81E3F3CE2EF4AB8FFC9F7FCDDC",
+      "stopName": "光霞西路小黄家湖路",
+      "lng": 114.280886,
+      "lat": 30.467391
+     },
+     {
+      "stopNo": 3,
+      "stopId": "EA4858EDEA0DFF8A73E1482685552450",
+      "stopName": "光霞西路白沙六路",
+      "lng": 114.28165,
+      "lat": 30.470637
+     },
+     {
+      "stopNo": 4,
+      "stopId": "8B431CA50D298995C7A3A7B4DF5C5BB6",
+      "stopName": "白沙四路华润紫云府",
+      "lng": 114.279089,
+      "lat": 30.473979
+     },
+     {
+      "stopNo": 5,
+      "stopId": "31AC2D2A1A54141F6360584378DC6858",
+      "stopName": "白沙三路白沙小路",
+      "lng": 114.280511,
+      "lat": 30.477905
+     },
+     {
+      "stopNo": 6,
+      "stopId": "D5130234246CDAD8B5F5EE6265934F10",
+      "stopName": "白沙三路光霞路口",
+      "lng": 114.284442,
+      "lat": 30.477715
+     },
+     {
+      "stopNo": 7,
+      "stopId": "B62EBB4CB4433EF57BE739C43A298B98",
+      "stopName": "白沙四路烽胜路",
+      "lng": 114.292483,
+      "lat": 30.473306
+     },
+     {
+      "stopNo": 8,
+      "stopId": "E94B3B595633C79CE2E9CD38AA498F68",
+      "stopName": "烽胜路清能清江锦城",
+      "lng": 114.293232,
+      "lat": 30.47539
+     },
+     {
+      "stopNo": 9,
+      "stopId": "5BA3A900E6815FCCAD1F43649C413BB0",
+      "stopName": "烽胜路地铁光霞",
+      "lng": 114.293232,
+      "lat": 30.47539
+     },
+     {
+      "stopNo": 10,
+      "stopId": "1A8E0FE89627FB0E6CA1CCEF70E669CA",
+      "stopName": "烽胜路金域天下",
+      "lng": 114.293128,
+      "lat": 30.481123
+     },
+     {
+      "stopNo": 11,
+      "stopId": "0EB27E6822BF4743A5800AB1DB528E3C",
+      "stopName": "烽胜路邬家墩",
+      "lng": 114.29295,
+      "lat": 30.484756
+     },
+     {
+      "stopNo": 12,
+      "stopId": "D45C1400FA29D1060FFB414661CADF04",
+      "stopName": "烽胜路楚祥大道口",
+      "lng": 114.293025,
+      "lat": 30.488337
+     },
+     {
+      "stopNo": 13,
+      "stopId": "8A2C5A614C4C07C06667E969C41DD33F",
+      "stopName": "烽胜路复地悦城",
+      "lng": 114.292979,
+      "lat": 30.490851
+     },
+     {
+      "stopNo": 14,
+      "stopId": "30201BE24D7F00F029001B12369B44C0",
+      "stopName": "烽胜路地铁张家湾",
+      "lng": 114.292979,
+      "lat": 30.490851
+     },
+     {
+      "stopNo": 15,
+      "stopId": "176598786114703496",
+      "stopName": "武梁路青菱中路",
+      "lng": 114.307153,
+      "lat": 30.497698
+     },
+     {
+      "stopNo": 16,
+      "stopId": "5B45C04C33401E7A267A342837D914A2",
+      "stopName": "武梁路巡司河东路口",
+      "lng": 114.307153,
+      "lat": 30.497698
+     },
+     {
+      "stopNo": 17,
+      "stopId": "F01C1F0D499B3C317D97B66F3722A826",
+      "stopName": "武梁路新千家街",
+      "lng": 114.312499,
+      "lat": 30.497224
+     },
+     {
+      "stopNo": 18,
+      "stopId": "EC3AC897620DC84A4046FE9AA58BD04E",
+      "stopName": "南李路武梁路",
+      "lng": 114.313694,
+      "lat": 30.503437
+     },
+     {
+      "stopNo": 19,
+      "stopId": "F8B323C21DD6AE13FA4BC45344BB9B96",
+      "stopName": "恒安路地铁建安街站",
+      "lng": 114.313694,
+      "lat": 30.503437
+     },
+     {
+      "stopNo": 20,
+      "stopId": "4FBC255CD1D33CBF8E84B6FCC4C5F06A",
+      "stopName": "建安街平安路",
+      "lng": 114.319117,
+      "lat": 30.50431
+     },
+     {
+      "stopNo": 21,
+      "stopId": "E12A5D7106796C025B33A4F6732F52AF",
+      "stopName": "建安街丁字桥南路",
+      "lng": 114.323432,
+      "lat": 30.504294
+     },
+     {
+      "stopNo": 22,
+      "stopId": "8C676D6F75CA592E0F1195E14A7786CE",
+      "stopName": "丁字桥南路建安街",
+      "lng": 114.325538,
+      "lat": 30.501935
+     },
+     {
+      "stopNo": 23,
+      "stopId": "DCBD374E5E7151C97641D3F91FA40953",
+      "stopName": "丁字桥南路富安街",
+      "lng": 114.325538,
+      "lat": 30.499553
+     },
+     {
+      "stopNo": 24,
+      "stopId": "E3852DD2C692F8214F00993282034F4D",
+      "stopName": "丁字桥南路文馨街",
+      "lng": 114.325603,
+      "lat": 30.495493
+     },
+     {
+      "stopNo": 25,
+      "stopId": "96BD50E3459FAA127614D7CD990D5927",
+      "stopName": "丁字桥南路华中师范附属小学",
+      "lng": 114.325809,
+      "lat": 30.488498
+     },
+     {
+      "stopNo": 26,
+      "stopId": "2C1D3627640C2E15D9A3B15456A66F35",
+      "stopName": "丁字桥南路楚祥大道",
+      "lng": 114.325645,
+      "lat": 30.480785
+     },
+     {
+      "stopNo": 27,
+      "stopId": "F4E092C3FBAED9018DBFACC2B94EEECA",
+      "stopName": "马湖公交停车场",
+      "lng": 114.325645,
+      "lat": 30.480785
+     }
+    ]
+   }
+  ],
+  "804": [
+   {
+    "lineId": "420100-804-0",
+    "lineName": "804",
+    "startStop": "武梁路江南村",
+    "endStop": "中山路大堤口",
+    "earlyHour": "06:00",
+    "lastHour": "21:00",
+    "price": "2",
+    "stops": [
+     {
+      "stopNo": 1,
+      "stopId": "318D555E9F89865D1ECBBF481AB66C76",
+      "stopName": "武梁路江南村",
+      "lng": 114.31883,
+      "lat": 30.497271
+     },
+     {
+      "stopNo": 2,
+      "stopId": "EC3AC897620DC84A4046FE9AA58BD04E",
+      "stopName": "南李路武梁路",
+      "lng": 114.314688,
+      "lat": 30.498108
+     },
+     {
+      "stopNo": 3,
+      "stopId": "F8B323C21DD6AE13FA4BC45344BB9B96",
+      "stopName": "恒安路地铁建安街站",
+      "lng": 114.313694,
+      "lat": 30.503437
+     },
+     {
+      "stopNo": 4,
+      "stopId": "E069B023E5999113B45C3159B6A6D582",
+      "stopName": "建安街恒安路口",
+      "lng": 114.316133,
+      "lat": 30.504249
+     },
+     {
+      "stopNo": 5,
+      "stopId": "4FBC255CD1D33CBF8E84B6FCC4C5F06A",
+      "stopName": "建安街平安路",
+      "lng": 114.319117,
+      "lat": 30.50431
+     },
+     {
+      "stopNo": 6,
+      "stopId": "E12A5D7106796C025B33A4F6732F52AF",
+      "stopName": "建安街丁字桥南路",
+      "lng": 114.323432,
+      "lat": 30.504294
+     },
+     {
+      "stopNo": 7,
+      "stopId": "173952486194091529",
+      "stopName": "文治街丁字桥南路",
+      "lng": 114.326492,
+      "lat": 30.504192
+     },
+     {
+      "stopNo": 8,
+      "stopId": "173952426307794959",
+      "stopName": "文治街金地格林小城",
+      "lng": 114.331133,
+      "lat": 30.50301
+     },
+     {
+      "stopNo": 9,
+      "stopId": "173952126673493994",
+      "stopName": "文治街书城路口",
+      "lng": 114.336277,
+      "lat": 30.501471
+     },
+     {
+      "stopNo": 10,
+      "stopId": "026C61F4827B1C8C3C86E564E4E4CD26",
+      "stopName": "书城路文治街",
+      "lng": 114.337398,
+      "lat": 30.501971
+     },
+     {
+      "stopNo": 11,
+      "stopId": "19C67F98C18ECEE97905856D304BB25E",
+      "stopName": "书城路北港春苑",
+      "lng": 114.339071,
+      "lat": 30.504978
+     },
+     {
+      "stopNo": 12,
+      "stopId": "346F778EDA0C96A8BD2BB0A4D4C7E702",
+      "stopName": "书城路出版城",
+      "lng": 114.341398,
+      "lat": 30.51049
+     },
+     {
+      "stopNo": 13,
+      "stopId": "28282FAA873CE947CFB37EEAF7ADEE66",
+      "stopName": "雄楚大道BRT书城路站",
+      "lng": 114.340709,
+      "lat": 30.511504
+     },
+     {
+      "stopNo": 14,
+      "stopId": "62184F6EFB7396B4B5B3C9220CE91590",
+      "stopName": "雄楚大道BRT珞狮路站",
+      "lng": 114.353765,
+      "lat": 30.510305
+     },
+     {
+      "stopNo": 15,
+      "stopId": "1C9CDBA4B19505B791142D455D8D5CCD",
+      "stopName": "雄楚大道BRT元宝山站",
+      "lng": 114.358031,
+      "lat": 30.509849
+     },
+     {
+      "stopNo": 16,
+      "stopId": "080B358DD671D7F7F5299C3EF31258B4",
+      "stopName": "卓刀泉南路陈家湾",
+      "lng": 114.366897,
+      "lat": 30.509436
+     },
+     {
+      "stopNo": 17,
+      "stopId": "0BBA5FCC28DC395D3B3BF2B0FE2873B8",
+      "stopName": "卓刀泉南路虎泉",
+      "lng": 114.368088,
+      "lat": 30.515711
+     },
+     {
+      "stopNo": 18,
+      "stopId": "3B199AF7A377D4B9EAFCA2D5DF6CC8F4",
+      "stopName": "珞喻路卓刀泉",
+      "lng": 114.367413,
+      "lat": 30.520404
+     },
+     {
+      "stopNo": 19,
+      "stopId": "FCFA8D916E1F2EC093F7C0437C02D61F",
+      "stopName": "珞喻路广埠屯",
+      "lng": 114.359865,
+      "lat": 30.524896
+     },
+     {
+      "stopNo": 20,
+      "stopId": "30C2F89DA589363265F6CECD8A311EC8",
+      "stopName": "珞喻路地铁街道口站",
+      "lng": 114.355882,
+      "lat": 30.526077
+     },
+     {
+      "stopNo": 21,
+      "stopId": "6770176DF39EED34D2D66CCA8A2CDFBD",
+      "stopName": "武珞路街道口",
+      "lng": 114.348555,
+      "lat": 30.527804
+     },
+     {
+      "stopNo": 22,
+      "stopId": "E23462608FAEBB0B62CC97D2FD0DBFBB",
+      "stopName": "武珞路地铁宝通寺站",
+      "lng": 114.341081,
+      "lat": 30.530187
+     },
+     {
+      "stopNo": 23,
+      "stopId": "D3F8DDCF5BF26A6BDF09D00EA1D3512C",
+      "stopName": "武珞路丁字桥",
+      "lng": 114.335327,
+      "lat": 30.532595
+     },
+     {
+      "stopNo": 24,
+      "stopId": "920CB7CBB338CBB173785CD9CEA0F2CD",
+      "stopName": "武珞路傅家坡",
+      "lng": 114.327528,
+      "lat": 30.535768
+     },
+     {
+      "stopNo": 25,
+      "stopId": "C545B5975BEF364EEB06D7C61B44AB1C",
+      "stopName": "武珞路大东门",
+      "lng": 114.321719,
+      "lat": 30.538902
+     },
+     {
+      "stopNo": 26,
+      "stopId": "95BECC489E88C512DBD704BCCC389592",
+      "stopName": "民主路宜家装饰广场",
+      "lng": 114.317699,
+      "lat": 30.543539
+     },
+     {
+      "stopNo": 27,
+      "stopId": "BBB8413A820E4021084841B89302F703",
+      "stopName": "民主路武警医院",
+      "lng": 114.312885,
+      "lat": 30.544019
+     },
+     {
+      "stopNo": 28,
+      "stopId": "864200D7F936D3434CE87B5D34F826B5",
+      "stopName": "民主路胭脂路",
+      "lng": 114.308464,
+      "lat": 30.544956
+     },
+     {
+      "stopNo": 29,
+      "stopId": "9FE21C31EA45BFD2B68E9ABF326BE550",
+      "stopName": "民主路司门口",
+      "lng": 114.301111,
+      "lat": 30.54589
+     },
+     {
+      "stopNo": 30,
+      "stopId": "8252E7218FAA1345DAC5B558BC4CA385",
+      "stopName": "解放路司门口",
+      "lng": 114.301055,
+      "lat": 30.551372
+     },
+     {
+      "stopNo": 31,
+      "stopId": "E2E76700C77F30D5FC5185B038998050",
+      "stopName": "中山路大堤口",
+      "lng": 114.300734,
+      "lat": 30.555304
+     }
+    ]
+   },
+   {
+    "lineId": "420100-804-1",
+    "lineName": "804",
+    "startStop": "中山路大堤口",
+    "endStop": "武梁路江南村",
+    "earlyHour": "06:00",
+    "lastHour": "22:00",
+    "price": "2",
+    "stops": [
+     {
+      "stopNo": 1,
+      "stopId": "E2E76700C77F30D5FC5185B038998050",
+      "stopName": "中山路大堤口",
+      "lng": 114.300734,
+      "lat": 30.555304
+     },
+     {
+      "stopNo": 2,
+      "stopId": "786C5028F3B05CA35C745305B0C4C714",
+      "stopName": "临江大道大堤口",
+      "lng": 114.298815,
+      "lat": 30.555022
+     },
+     {
+      "stopNo": 3,
+      "stopId": "1BCB22D7D08B98691AD76A49DEB7D5A8",
+      "stopName": "临江大道汉阳门",
+      "lng": 114.293876,
+      "lat": 30.548194
+     },
+     {
+      "stopNo": 4,
+      "stopId": "3576B66AD481DEA097B0010CDBA8C92F",
+      "stopName": "临江大道平湖门",
+      "lng": 114.292972,
+      "lat": 30.544514
+     },
+     {
+      "stopNo": 5,
+      "stopId": "44798CAEF687D5501A441DB6F4B9D067",
+      "stopName": "彭刘杨西路",
+      "lng": 114.294253,
+      "lat": 30.539981
+     },
+     {
+      "stopNo": 6,
+      "stopId": "620EC87A2CF3CC2E0E272EF5C3B28F32",
+      "stopName": "彭刘杨路黄鹤楼南路",
+      "lng": 114.299857,
+      "lat": 30.53987
+     },
+     {
+      "stopNo": 7,
+      "stopId": "28D250EFE239ED9D7625503AF35C7B93",
+      "stopName": "武珞路阅马场",
+      "lng": 114.30806,
+      "lat": 30.540378
+     },
+     {
+      "stopNo": 8,
+      "stopId": "70412D9C4FE4E553757845B706569906",
+      "stopName": "武珞路大东门",
+      "lng": 114.321719,
+      "lat": 30.538902
+     },
+     {
+      "stopNo": 9,
+      "stopId": "6DFA152753DA6D0A36CFC8640C8C6C91",
+      "stopName": "武珞路傅家坡",
+      "lng": 114.327528,
+      "lat": 30.535768
+     },
+     {
+      "stopNo": 10,
+      "stopId": "97FA288D8F31F6C9D156F37630981647",
+      "stopName": "武珞路丁字桥",
+      "lng": 114.335327,
+      "lat": 30.532595
+     },
+     {
+      "stopNo": 11,
+      "stopId": "79A6E9CFDAB68C98C9E91FE6A6C209C5",
+      "stopName": "武珞路地铁宝通寺站",
+      "lng": 114.341081,
+      "lat": 30.530187
+     },
+     {
+      "stopNo": 12,
+      "stopId": "DD71F28B7E653C55FC43EAD0F413AEDC",
+      "stopName": "武珞路街道口",
+      "lng": 114.348555,
+      "lat": 30.527804
+     },
+     {
+      "stopNo": 13,
+      "stopId": "670542C81973CFE1499E61B0059412F3",
+      "stopName": "珞喻路地铁街道口站",
+      "lng": 114.355882,
+      "lat": 30.526077
+     },
+     {
+      "stopNo": 14,
+      "stopId": "DE98B5E2B7978A5614981D62D1FB2633",
+      "stopName": "珞喻路广埠屯",
+      "lng": 114.359865,
+      "lat": 30.524896
+     },
+     {
+      "stopNo": 15,
+      "stopId": "2A4645B2E35513FAB83D841EA55E2200",
+      "stopName": "珞喻路卓刀泉",
+      "lng": 114.367413,
+      "lat": 30.520404
+     },
+     {
+      "stopNo": 16,
+      "stopId": "174080826331907451",
+      "stopName": "卓刀泉南路桂东路",
+      "lng": 114.368088,
+      "lat": 30.515711
+     },
+     {
+      "stopNo": 17,
+      "stopId": "ACF1A1785333167D84C4987319544300",
+      "stopName": "卓刀泉南路虎泉",
+      "lng": 114.368088,
+      "lat": 30.515711
+     },
+     {
+      "stopNo": 18,
+      "stopId": "443E93DB80BE9E838B4D8FC396EC86AA",
+      "stopName": "卓刀泉南路陈家湾",
+      "lng": 114.366897,
+      "lat": 30.509436
+     },
+     {
+      "stopNo": 19,
+      "stopId": "7A4FDF8B74AF968B56B4AA871C7C8851",
+      "stopName": "雄楚大道BRT元宝山站",
+      "lng": 114.358031,
+      "lat": 30.509849
+     },
+     {
+      "stopNo": 20,
+      "stopId": "589871B1A80F243F0B81DF63ACC7F02F",
+      "stopName": "雄楚大道BRT珞狮路站",
+      "lng": 114.353765,
+      "lat": 30.510305
+     },
+     {
+      "stopNo": 21,
+      "stopId": "90CC8E2D979577F28B98CFFFC8CCAEBD",
+      "stopName": "珞狮路狮城名居",
+      "lng": 114.348571,
+      "lat": 30.507681
+     },
+     {
+      "stopNo": 22,
+      "stopId": "32B7C339703C52ECD3394F340788331C",
+      "stopName": "珞狮路幸福村",
+      "lng": 114.347861,
+      "lat": 30.506331
+     },
+     {
+      "stopNo": 23,
+      "stopId": "173952546236893567",
+      "stopName": "文秀街",
+      "lng": 114.343002,
+      "lat": 30.504128
+     },
+     {
+      "stopNo": 24,
+      "stopId": "2E30AEDFC3DFF495D4B5564FAE01B92F",
+      "stopName": "书城路北港春苑",
+      "lng": 114.339071,
+      "lat": 30.504978
+     },
+     {
+      "stopNo": 25,
+      "stopId": "02C2D1F2CC0BC48731E9135BD25E7FD5",
+      "stopName": "书城路文治街",
+      "lng": 114.337398,
+      "lat": 30.501971
+     },
+     {
+      "stopNo": 26,
+      "stopId": "173952126693798666",
+      "stopName": "文治街书城路口",
+      "lng": 114.336277,
+      "lat": 30.501471
+     },
+     {
+      "stopNo": 27,
+      "stopId": "172382520856173802",
+      "stopName": "文治街金地格林小城",
+      "lng": 114.331133,
+      "lat": 30.50301
+     },
+     {
+      "stopNo": 28,
+      "stopId": "173952858617891791",
+      "stopName": "文治街丁字桥南路",
+      "lng": 114.326492,
+      "lat": 30.504192
+     },
+     {
+      "stopNo": 29,
+      "stopId": "0FBA7951A7F0A80D4CB786113143A14E",
+      "stopName": "建安街丁字桥南路",
+      "lng": 114.323432,
+      "lat": 30.504294
+     },
+     {
+      "stopNo": 30,
+      "stopId": "852B5F576DF8972903107051A708040D",
+      "stopName": "建安街平安路",
+      "lng": 114.319117,
+      "lat": 30.50431
+     },
+     {
+      "stopNo": 31,
+      "stopId": "DD1EBF3E26905E47DD593F861E51F9A2",
+      "stopName": "建安街恒安路口",
+      "lng": 114.316133,
+      "lat": 30.504249
+     },
+     {
+      "stopNo": 32,
+      "stopId": "EC17790C4526835777CA42DF258E2ED9",
+      "stopName": "恒安路地铁建安街站",
+      "lng": 114.313694,
+      "lat": 30.503437
+     },
+     {
+      "stopNo": 33,
+      "stopId": "DA6BD366833FF73BD6F1F34C806D05E7",
+      "stopName": "南李路武梁路",
+      "lng": 114.318595,
+      "lat": 30.49733
+     }
+    ]
+   }
+  ]
+ }
+}

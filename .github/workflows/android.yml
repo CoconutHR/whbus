@@ -100,11 +100,17 @@ jobs:
           prefix-key: v1-rust
           cache-on-failure: true
 
-      # Rust 单测覆盖 SM4 解密、坐标转换偏移量、ETA 区间、规划算法、
+      # 单测覆盖 SM4 解密、坐标转换偏移量、ETA 区间、规划算法、
       # 收班判定（含跨零点）、脏数据容错等最易出错的部分。
-      - name: Rust unit tests
+      #
+      # 用 `cargo test`（不带 --lib）以便**同时跑集成测试**：
+      # tests/real_data_plan.rs 用从上游实抓的真实站点表驱动规划算法，
+      # 验证"家 -> 公司"这条真实通勤线路能出方案。单测的手工 fixture
+      # 证明不了这一点——真实数据会带来 4 个方向的站序差异、
+      # 同一物理站点的东/西行双 stopId、以及"必须换乘才能到达"这个事实。
+      - name: Rust tests (unit + integration)
         working-directory: src-tauri
-        run: cargo test --lib --verbose
+        run: cargo test --verbose
 
   # ---------------------------------------------------------------------------
   # 安卓构建：release（日常用）+ debug（排查用）
