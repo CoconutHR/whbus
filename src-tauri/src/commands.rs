@@ -176,6 +176,20 @@ pub async fn get_line_vehicles(
         run_status: detail.base.line_type,
     };
 
+    // 尚未发班的班次：解析成"距现在多少分钟"后按时间升序，
+    // 这样 UI 能直接显示"下一班 X 分钟后发车"。
+    let mut pending: Vec<(f64, String)> = raw
+        .plans
+        .iter()
+        .filter_map(|p| {
+            let t = p.trim();
+            transit::minutes_until_departure(t, &hhmm).map(|m| (m, t.to_string()))
+        })
+        .collect();
+    pending.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    // 同一时刻可能重复出现（实测 715-0 有 ['10:25','10:25',...]），去重后更干净
+    pending.dedup_by(|a, b| a.1 == b.1);
+
     Ok(LineRealtime {
         line_id: detail.base.line_id.clone(),
         line_name: detail.base.line_name.clone(),
@@ -185,6 +199,9 @@ pub async fn get_line_vehicles(
         in_service: summary.is_in_service(&hhmm),
         early_hour: detail.base.early_hour.clone(),
         last_hour: detail.base.last_hour.clone(),
+        // 由在线车辆的班次号反推发车间隔：回答"错过这班要等多久"
+        headway_min: transit::estimate_headway_min(&vehicles),
+        pending_departures: pending.into_iter().map(|(_, t)| t).collect(),
         stops: detail.stops,
         cumulative_meters: detail.cumulative_meters,
         total_meters: detail.total_meters,

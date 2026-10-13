@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use whbus_lib::gcj::LngLat;
 use whbus_lib::journey::{plan_from, CandidateStop, PlanInputs, PlanOptions};
 use whbus_lib::types::{
-    GeoPoint, LegKind, LineBaseDto, LineDetail, PositionConfidence, StopView,
+    GeoPoint, LegKind, LineBaseDto, LineDetail, PositionConfidence, StopView, VehicleMotion,
     VehicleView,
 };
 
@@ -150,6 +150,9 @@ fn vehicle_at_start(line_id: &str) -> VehicleView {
         gps_time: Some("20261013093000".into()),
         age_seconds: Some(15),
         confidence: PositionConfidence::Live,
+        // 测试不模拟停站/堵车，按"未知"处理
+        motion: VehicleMotion::Unknown,
+        distance_to_stop_m: None,
     }
 }
 
@@ -414,6 +417,101 @@ fn real_data_survives_missing_stop_tables() {
     );
 
     assert!(plans.is_empty(), "缺站点表时应安静地返回空结果");
+}
+
+/// 同一辆车，状态不同 → 候车时间不同。
+///
+/// # 为什么不用"整条方案的总耗时"来验证
+///
+/// 早期版本对比"所有车都堵"与"所有车都畅通"两个完整规划，断言前者总耗时更长。
+/// 那是个**错误的抽象层次**：它同时改变了车辆速度、状态、以及（因为候选排序变化）
+/// 最终胜出的是哪条方案，于是比较的根本不是同一个量，
+/// 断言在 0.5 分钟这种噪声级别上时对时错。
+///
+/// 这里退一步，直接在最底层比较：同样距离、同一辆车，只换运动状态。
+/// 这样检验的才是"拥堵惩罚是否生效"这一个事实。
+#[test]
+fn congestion_penalty_delays_the_wait() {
+    use whbus_lib::transit::SpeedModel;
+    use whbus_lib::types::VehicleMotion;
+
+    // 用两条线路的真实站距构造一段有代表性的距离（687 路相邻站约 1.2km）
+    let fx = load();
+    let seg = {
+        let d = to_detail(&fx.lines["687"][0]);
+        // 取第 3 段站距作为样本
+        d.cumulative_meters[3] - d.cumulative_meters[2]
+    };
+    assert!(seg > 100.0, "站距样本太小：{seg}");
+
+    let model = SpeedModel::new(); // 冷启动：没有任何历史样本，最坏情况
+
+    let unknown = model.travel_minutes_with_motion(seg, Some(0.0), VehicleMotion::Unknown);
+    let stopped = model.travel_minutes_with_motion(seg, Some(0.0), VehicleMotion::Stopped);
+
+    let mid = |(l, h): (f64, f64)| (l + h) / 2.0;
+    assert!(
+        mid(stopped) > mid(unknown),
+        "堵车时 {seg:.0} 米的候车应更久：{:.1} vs {:.1} 分钟",
+        mid(stopped),
+        mid(unknown)
+    );
+    assert!(
+        (stopped.1 - stopped.0) > (unknown.1 - unknown.0),
+        "堵车时的不确定性应更大：{:.1} vs {:.1}",
+        stopped.1 - stopped.0,
+        unknown.1 - unknown.0
+    );
+}
+
+/// 任何情况下都不该出现物理上不可能的耗时。
+///
+/// 这个测试守住的是一类真实 bug：早期冷启动的区间宽度没有上限，
+/// 下界被压到接近 0，配合规划器用下界累加总耗时，算出过
+/// "2773 米只要 0.07 分钟"（≈2400 km/h）这种荒谬值。
+#[test]
+fn real_data_never_produces_impossible_durations() {
+    let fx = load();
+    let origin = LngLat::new(fx.origin.lng, fx.origin.lat);
+    let dest = LngLat::new(fx.dest.lng, fx.dest.lat);
+
+    for motion in [
+        VehicleMotion::Moving,
+        VehicleMotion::AtStop,
+        VehicleMotion::Stopped,
+        VehicleMotion::Unknown,
+    ] {
+        for speed in [0.0, 5.0, 25.0] {
+            let mut inputs = build_inputs(&fx);
+            for vs in inputs.vehicles.values_mut() {
+                for v in vs.iter_mut() {
+                    v.motion = motion;
+                    v.speed_kmh = Some(speed);
+                }
+            }
+            let plans = plan_from(origin, dest, &inputs, &PlanOptions::default());
+
+            for p in &plans {
+                // 每一段的耗时都必须与它的里程相称
+                for l in &p.legs {
+                    let Some(meters) = l.meters else { continue };
+                    if l.kind != LegKind::Bus || meters <= 100.0 {
+                        continue;
+                    }
+                    // 公交在城市里的速度上限取 80 km/h（含停站，极宽松）
+                    let min_minutes = (meters / 1000.0) / 80.0 * 60.0;
+                    assert!(
+                        l.minutes >= min_minutes,
+                        "{motion:?}@{speed} 时 {:.0} 米的乘车段只用了 {:.2} 分钟，\
+                         低于 80km/h 的物理下限 {:.2} 分钟",
+                        meters,
+                        l.minutes,
+                        min_minutes
+                    );
+                }
+            }
+        }
+    }
 }
 
 #[test]

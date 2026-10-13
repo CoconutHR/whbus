@@ -1,8 +1,8 @@
 import { MiniTimeline, type TimelineVehicle } from "./MiniTimeline";
-import { FreshnessChip } from "./ui";
+import { Chip, FreshnessChip } from "./ui";
 import { IconBus, IconMoon } from "./icons";
 import { useLineRealtime } from "../lib/polling";
-import { formatAge, formatEtaRange, lineColorVar } from "../lib/utils";
+import { formatAge, formatEtaRange, headwayText, lineColorVar, motionBadge } from "../lib/utils";
 import "./LineRealtimeCard.css";
 
 /**
@@ -110,6 +110,15 @@ export function LineRealtimeCard({
               {focus.stopsAway === 0 ? "即将进站" : `还有 ${focus.stopsAway} 站`}
               {next ? ` · 下一班 ${Math.round(next.etaMinLow)} 分` : ""}
             </span>
+            {/*
+              运动状态是判断"这个 ETA 靠不靠谱"的关键：
+              堵在路口的车即使 ETA 接近，也可能比预期晚很多
+            */}
+            {(() => {
+              const v = data?.vehicles.find((x) => x.busId === focus.busId);
+              const mb = motionBadge(v?.motion);
+              return mb && mb.notable ? <Chip tone={mb.tone}>{mb.label}</Chip> : null;
+            })()}
           </span>
         ) : (
           <span className="lrc__row2">
@@ -135,6 +144,15 @@ export function LineRealtimeCard({
               {startStop} → {endStop}
               {hasInferred ? " · 含推测位置" : ""}
             </span>
+            {/*
+              发车间隔由在线车辆的班次号反推，回答"错过这班要等多久"。
+              待发班次来自上游的 plans 字段（收班时段为空，届时整行不显示）。
+            */}
+            {headwayText(data.headwayMin, data.pendingDepartures) ? (
+              <span className="lrc__legend t-cap t-3">
+                {headwayText(data.headwayMin, data.pendingDepartures)}
+              </span>
+            ) : null}
           </span>
         ) : null}
 

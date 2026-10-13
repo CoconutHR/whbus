@@ -14,7 +14,7 @@ import {
 import { useLineRealtime } from "../lib/polling";
 import { useAppStore } from "../lib/store";
 import type { ArrivalView } from "../lib/types";
-import { formatAge, formatDistance, formatEtaRange, lineColorVar } from "../lib/utils";
+import { formatAge, formatDistance, formatEtaRange, headwayText, lineColorVar, motionBadge } from "../lib/utils";
 import "./LineDetailView.css";
 
 /**
@@ -166,6 +166,18 @@ export function LineDetailView({
                       在线 {data.vehicles.length} 辆 · 全程 {data.stops.length} 站 ·{" "}
                       {formatDistance(data.totalMeters)}
                     </div>
+
+                    {/*
+                      发车间隔由在线车辆的班次号反推；待发班次来自上游的 plans 字段。
+                      这两项回答"错过这班要等多久"——上游不给完整时刻表，
+                      这是唯一的推算途径。收班时 plans 为空，整块自然消失。
+                    */}
+                    {headwayText(data.headwayMin, data.pendingDepartures) ? (
+                      <div className="ldv__headway t-cap t-2">
+                        <IconClock size={12} />
+                        {headwayText(data.headwayMin, data.pendingDepartures)}
+                      </div>
+                    ) : null}
                   </>
                 )}
 
@@ -283,6 +295,18 @@ export function LineDetailView({
                               ) : arrived && data.inService && data.hasLiveVehicle ? (
                                 <span className="t-cap t-3">已过</span>
                               ) : null}
+                              {/*
+                                到达该站的车的运动状态：停站/堵车都会让 ETA 不可靠，
+                                用户需要据此决定要不要现在出门
+                              */}
+                              {(() => {
+                                if (!arrival) return null;
+                                const v = data.vehicles.find((x) => x.busId === arrival.busId);
+                                const mb = motionBadge(v?.motion);
+                                return mb && mb.notable ? (
+                                  <Chip tone={mb.tone}>{mb.label}</Chip>
+                                ) : null;
+                              })()}
                             </div>
                           </div>
                         </div>

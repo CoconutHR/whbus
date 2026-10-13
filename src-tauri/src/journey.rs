@@ -158,7 +158,11 @@ fn wait_for_line(
             continue;
         }
         let meters_away = (stop_meters - along).max(0.0);
-        let (low, high) = model.travel_minutes(meters_away, v.speed_kmh);
+        // 候车时间也要吃运动状态：一辆堵在路口的车，到你这站的时间
+        // 既更晚、也更不可预测。早期这里固定传 Unknown，
+        // 于是"堵车"只影响乘车段，而候车段（用户最关心的那一段）完全没反应。
+        let (low, high) =
+            model.travel_minutes_with_motion(meters_away, v.speed_kmh, v.motion);
 
         let better = best.as_ref().map_or(true, |(bl, _, _, _)| low < *bl);
         if better {
@@ -175,19 +179,35 @@ fn wait_for_line(
     ))
 }
 
-/// 乘车时间（分钟）：从 `board_m` 到 `alight_m` 的沿线里程。
-fn ride_minutes(
+/// 乘车时间（分钟）区间：从 `board_m` 到 `alight_m` 的沿线里程。
+///
+/// # 用实时速度修正
+///
+/// 早期这里固定传 `None`，即完全按历史平均速度估算乘车段，
+/// 忽略了**这辆车此刻的实际速度**。结果是：一辆正在畅通行驶的车
+/// 和一辆堵在路口的车，给出的乘车时间一样，显然不对。
+///
+/// 现在把该车的实时速度与运动状态一起传进模型：
+/// - 车在动 → 速度可信，区间收窄
+/// - 车在站停靠 → 加上下客时间
+/// - 车堵着 → 上界放宽（用户最怕的是误车，所以下界保守、上界放宽）
+pub fn ride_minutes_with_vehicle(
     board_m: f64,
     alight_m: f64,
-    line_id: &str,
-    inputs: &PlanInputs,
+    vehicle: Option<&VehicleView>,
     model: &SpeedModel,
 ) -> (f64, f64) {
     let meters = (alight_m - board_m).max(0.0);
-    // 乘车段用平均运营速度估算：车已经在路上，实时速度的参考价值有限
-    let _ = line_id;
-    let _ = inputs;
-    model.travel_minutes(meters, None)
+    // 已到终点的车不该用来推算乘车段 —— 它的"当前速度"没有参考价值，
+    // 退化到不带车辆信息的保守估算。
+    //
+    // 这个退化路径实测有真实后果：早期把 `Arrived` 也传进
+    // `travel_minutes_with_motion`，于是测试里所有车都到终点时算出
+    // "2773 米只要 0.07 分钟"这种荒谬值。
+    match vehicle {
+        Some(v) if !v.arrived => model.travel_minutes_with_motion(meters, v.speed_kmh, v.motion),
+        _ => model.travel_minutes(meters, None),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -256,8 +276,10 @@ fn find_direct(
                         continue;
                     };
 
+                    // 用**这辆车**的实时速度与运动状态修正乘车段，
+                    // 而不是套用全线平均速度
                     let (ride, ride_spread) =
-                        ride_minutes(board_m, alight_m, line_id, inputs, &model);
+                        ride_minutes_with_vehicle(board_m, alight_m, vehicle.as_ref(), &model);
 
                     let total = opts.boarding_overhead_min + walk1 + wait + ride + walk2;
 
@@ -434,7 +456,8 @@ fn find_one_transfer(
                         ) else {
                             continue;
                         };
-                        let (ride1, rsp1) = ride_minutes(b1_m, t1_m, l1_id, inputs, &model);
+                        let (ride1, rsp1) =
+                            ride_minutes_with_vehicle(b1_m, t1_m, veh1.as_ref(), &model);
 
                         // 换乘候车：从到达换乘站的时刻起算
                         let Some((wait2, sp2, veh2, conf2)) = wait_for_line(l2_id, b2_m,
@@ -443,7 +466,8 @@ fn find_one_transfer(
                         ) else {
                             continue;
                         };
-                        let (ride2, rsp2) = ride_minutes(b2_m, a2_m, l2_id, inputs, &model);
+                        let (ride2, rsp2) =
+                            ride_minutes_with_vehicle(b2_m, a2_m, veh2.as_ref(), &model);
 
                         let total = opts.boarding_overhead_min
                             + walk1
@@ -742,7 +766,7 @@ pub fn latest_departure(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{GeoPoint, LineBaseDto};
+    use crate::types::{GeoPoint, LineBaseDto, VehicleMotion};
 
     /// 构造一条测试线路。
     ///
@@ -811,6 +835,9 @@ mod tests {
             gps_time: Some("20261013090000".into()),
             age_seconds: Some(20),
             confidence: PositionConfidence::Live,
+            // 测试里不模拟停站/堵车，统一按"未知"处理（不影响确定性逻辑）
+            motion: VehicleMotion::Unknown,
+            distance_to_stop_m: None,
         }
     }
 

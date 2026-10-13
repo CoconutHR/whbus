@@ -67,6 +67,15 @@ export interface LineDetail {
   totalMeters: number;
 }
 
+/**
+ * 车辆的行驶动力学状态。
+ *
+ * 上游只给一个 `gpsSpeed`，为 0 时既可能是**停在站台上下客**，
+ * 也可能是**堵在路上等红灯**——两者对 ETA 的含义完全不同。
+ * 后端依据"车辆与最近站点的距离"来区分。
+ */
+export type VehicleMotion = "moving" | "atStop" | "stopped" | "arrived" | "unknown";
+
 export interface VehicleView {
   busId: string;
   /** 班次序号，仅用于排序与区分，**不是车牌** */
@@ -83,6 +92,10 @@ export interface VehicleView {
   gpsTime: string | null;
   ageSeconds: number | null;
   confidence: PositionConfidence;
+  /** 行驶动力学：行驶中 / 停站 / 堵车 */
+  motion: VehicleMotion;
+  /** 距最近站点的距离（米），用于区分停站与堵车 */
+  distanceToStopM: number | null;
 }
 
 export interface ArrivalView {
@@ -116,6 +129,19 @@ export interface LineRealtime {
   inService: boolean;
   earlyHour: string;
   lastHour: string;
+  /**
+   * 尚未发班的班次（预计发车时刻 `HH:MM`，已升序）。
+   *
+   * 来自 `/bus/detailData` 的 `plans` 字段。注意它**在收班时段恒为空**，
+   * 因此 UI 要把"没有待发班次"和"已收班"分成两种表达。
+   */
+  pendingDepartures: string[];
+  /**
+   * 由在线车辆班次号反推的**发车间隔**（分钟）。
+   *
+   * 用于回答"错过这班要等多久"。上游不提供完整时刻表，这是唯一的推算途径。
+   */
+  headwayMin: number | null;
 }
 
 export interface NearbyStop {

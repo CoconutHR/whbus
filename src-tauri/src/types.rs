@@ -378,9 +378,24 @@ pub struct DetailData {
     /// 空数组表示该方向**确实没有在线车辆**（未发车/已回场），不是接口故障
     #[serde(default)]
     pub line_bus_dto_list: Vec<RawVehicle>,
-    /// 实测恒为空，不要依赖
+    /// **尚未发班的班次计划发车时刻**，格式 `"HH:MM"`。
+    ///
+    /// # 这是本项目踩过的一个坑
+    ///
+    /// 早期在凌晨采样，这里恒为 `[]`，我据此写下"上游没有班次计划表"的结论，
+    /// 并删掉了整个"计划班次"的 UI 设计。白天复测发现有值，例如：
+    ///
+    /// ```text
+    /// 420100-687-0  车=4（busOrder 3/13/25/26）  plans=['10:40']
+    /// 420100-715-0  车=5                        plans=['10:25','10:25','10:40','10:40','10:40']
+    /// ```
+    ///
+    /// 规律是：**在跑的车越多，plans 越少**——它记录的是还没发车的那部分班次。
+    /// 收班时段自然为空，所以凌晨看不到。
+    ///
+    /// 元素是字符串（`"10:40"`），不是对象。
     #[serde(default)]
-    pub plans: Vec<serde_json::Value>,
+    pub plans: Vec<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -519,6 +534,17 @@ pub struct LineRealtime {
     pub in_service: bool,
     pub early_hour: String,
     pub last_hour: String,
+    /// 尚未发班的班次（预计发车时刻，`HH:MM`），已按时间升序。
+    ///
+    /// 来自 `/bus/detailData` 的 `plans` 字段。注意它在**收班时段恒为空**，
+    /// 因此 UI 必须把"没有待发班次"和"收班了"当成两件事分别表达。
+    pub pending_departures: Vec<String>,
+    /// 由在线车辆反推的**发车间隔**（分钟）。
+    ///
+    /// 上游不提供班次时刻表，但同一方向的在线车辆班次号之差就是发车间隔，
+    /// 例如班次号 [3,13,25,26] 的间隔约 10-11。用于回答
+    /// "错过这班要等多久"。
+    pub headway_min: Option<f64>,
 }
 
 /// 一辆车在 UI 上的形态
@@ -546,6 +572,10 @@ pub struct VehicleView {
     pub age_seconds: Option<i64>,
     /// 位置可信度：真实 GPS / 历史推测
     pub confidence: PositionConfidence,
+    /// 行驶动力学：行驶中 / 停站 / 堵车
+    pub motion: VehicleMotion,
+    /// 距最近站点的距离（米）。用于区分"停站"与"堵车"
+    pub distance_to_stop_m: Option<f64>,
 }
 
 /// 位置可信度——直接驱动 UI 上"实线 vs 虚线"的表达
@@ -560,6 +590,32 @@ pub enum PositionConfidence {
     Inferred,
     /// 数据过旧或缺失，位置不可用
     Stale,
+}
+
+/// 车辆的行驶动力学状态。
+///
+/// # 为什么要区分这两种"速度为 0"
+///
+/// 上游只给一个 `gpsSpeed`，为 0 时既可能是**停在站台上下客**，
+/// 也可能是**堵在路上等红灯**。两者对 ETA 的含义完全不同：
+/// - 在站停靠：马上就会走，按正常速度估就行
+/// - 堵在路上：可能还要堵很久，ETA 必须放宽
+///
+/// 区分依据是**车辆与最近站点的距离**：贴着站台且速度为 0 → 停靠；
+/// 离站台远且速度为 0 → 堵车。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum VehicleMotion {
+    /// 正常行驶
+    Moving,
+    /// 停在站台（上下客）
+    AtStop,
+    /// 速度为 0 但不在站台 —— 大概是路口或拥堵
+    Stopped,
+    /// 已到达终点
+    Arrived,
+    /// GPS 速度缺失，无法判断
+    Unknown,
 }
 
 /// 到站预判

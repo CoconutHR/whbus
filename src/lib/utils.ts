@@ -78,3 +78,50 @@ export function lineColorVar(lineName: string): string {
   }
   return `var(--line-${(h % 8) + 1})`;
 }
+
+/** 车辆运动状态在 UI 上的表达 */
+export interface MotionBadge {
+  label: string;
+  /** 胶囊配色 */
+  tone: "live" | "warn" | "neutral" | "brand";
+  /** 是否值得让用户注意（停站/堵车都会影响到达时间） */
+  notable: boolean;
+}
+
+/**
+ * 把运动状态翻译成用户能懂的一句话。
+ *
+ * 之所以要显式展示"停站/堵车"，是因为它们是**用户判断要不要现在出门的依据**：
+ * 一辆堵在路口的车和一辆正常行驶的车，即使 ETA 接近，可靠性也完全不同。
+ */
+export function motionBadge(motion: string | undefined): MotionBadge | null {
+  switch (motion) {
+    case "moving":
+      return { label: "行驶中", tone: "live", notable: false };
+    case "atStop":
+      return { label: "停站上下客", tone: "brand", notable: true };
+    case "stopped":
+      // 速度为 0 但不在站台 —— 大概率是路口或拥堵，ETA 会放宽
+      return { label: "等待中", tone: "warn", notable: true };
+    case "arrived":
+      return { label: "已到终点", tone: "neutral", notable: false };
+    default:
+      return null;
+  }
+}
+
+/** 发车间隔与待发班次的文字表达 */
+export function headwayText(
+  headwayMin: number | null,
+  pending: string[],
+): string | null {
+  const parts: string[] = [];
+  if (headwayMin != null) {
+    parts.push(`约 ${Math.round(headwayMin)} 分钟一班`);
+  }
+  if (pending.length > 0) {
+    const next = pending.slice(0, 3).join(" / ");
+    parts.push(`待发 ${next}`);
+  }
+  return parts.length > 0 ? parts.join(" · ") : null;
+}

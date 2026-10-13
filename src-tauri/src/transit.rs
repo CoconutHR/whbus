@@ -17,7 +17,8 @@
 
 use crate::gcj::{LngLat, cumulative_lengths, distance_m, project_onto_path};
 use crate::types::{
-    ArrivalView, LineDetail, PositionConfidence, RawVehicle, StopView, VehicleView,
+    ArrivalView, LineDetail, PositionConfidence, RawVehicle, StopView, VehicleMotion,
+    VehicleView,
 };
 
 /// GPS 数据仍算"新鲜"的阈值
@@ -108,6 +109,53 @@ pub fn confidence_for_age(age: Option<i64>) -> PositionConfidence {
     }
 }
 
+/// 判定车辆到"最近站点"的直线距离（米）。
+///
+/// 用于区分两种"速度为 0"：贴着站台 = 停靠上下客，离站台远 = 堵在路上。
+fn distance_to_nearest_stop(detail: &LineDetail, p: LngLat) -> Option<(f64, i64)> {
+    detail
+        .stops
+        .iter()
+        .filter_map(|s| {
+            let sp = s.point.map(LngLat::from)?;
+            Some((distance_m(p, sp), s.stop_no))
+        })
+        .min_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
+}
+
+/// 判定车辆的行驶动力学状态。
+///
+/// # 为什么要区分两种"速度为 0"
+///
+/// 上游只给一个 `gpsSpeed`。为 0 时既可能是**停在站台上下客**，
+/// 也可能是**堵在路上等红灯**——两者对 ETA 的含义完全不同：
+/// 前者的等待马上结束，后者可能还要很久。
+///
+/// 区分依据是车辆与最近站点的距离：**贴着站台**（< 60 米）算停靠，
+/// 离得远（> 150 米）算堵车，中间地带保守地算"停站"
+/// （市区站距通常 300-800 米，车辆极少恰好停在两站中间）。
+pub fn classify_motion(
+    raw: &RawVehicle,
+    arrived_flag: bool,
+    dist_to_stop: Option<f64>,
+) -> VehicleMotion {
+    if arrived_flag {
+        return VehicleMotion::Arrived;
+    }
+    let Some(speed) = raw.gps_speed else {
+        return VehicleMotion::Unknown;
+    };
+    if speed >= 3.0 {
+        return VehicleMotion::Moving;
+    }
+    match dist_to_stop {
+        Some(d) if d <= 60.0 => VehicleMotion::AtStop,
+        Some(_) => VehicleMotion::Stopped,
+        // 没有坐标可判断时，保守当作堵车（宁可把 ETA 放宽）
+        None => VehicleMotion::Stopped,
+    }
+}
+
 /// 把一辆原始车辆数据吸附到线路走向上，得到 UI 可直接渲染的视图。
 ///
 /// `fetched_at` 为本次请求成功返回的时刻（本地 `yyyyMMddHHmmss`），
@@ -152,11 +200,16 @@ pub fn position_vehicle(
         None => (None, None),
     };
 
+    // 距最近站点的直线距离 —— 用于判定"停站"还是"堵车"
+    let dist_to_stop = point.and_then(|p| distance_to_nearest_stop(detail, p).map(|(d, _)| d));
+
     // 垂距过大（>800m）说明车辆偏离线路走向，位置不可信
     let confidence = match (age, offset_m) {
         (_, Some(off)) if off > 800.0 => PositionConfidence::Stale,
         (a, _) => confidence_for_age(a),
     };
+
+    let motion = classify_motion(raw, arrival_flag, dist_to_stop);
 
     VehicleView {
         bus_id: raw.bus_id.clone(),
@@ -171,6 +224,8 @@ pub fn position_vehicle(
         gps_time,
         age_seconds: age,
         confidence,
+        motion,
+        distance_to_stop_m: dist_to_stop,
     }
 }
 
@@ -268,7 +323,7 @@ impl SpeedModel {
         kmh.clamp(8.0, 45.0)
     }
 
-    /// 融合后的有效速度（km/h）。
+    /// 融合后的有效速度（km/h），**不含运动状态修正**。
     ///
     /// `live_kmh` 为车辆当前 GPS 速度（可为 `None` 或 0——静止/等灯时速度为 0，
     /// 此时不能直接采信，否则会算出无穷大的 ETA）。
@@ -289,31 +344,124 @@ impl SpeedModel {
         }
     }
 
+    /// 由运动状态决定"这一段路能跑多快"。
+    ///
+    /// # 为什么不能直接把静止车辆的速度喂进 `effective_kmh`
+    ///
+    /// 早期实现里，一辆速度为 0 的车会被 `effective_kmh` 夹到保底的
+    /// **6 km/h**，于是"堵车的乘车段"算出来比"畅通的乘车段"还快——
+    /// 因为畅通那辆车虽然实时速度 25，却只按 0.35 权重混入，得到 20 km/h 左右。
+    /// 这是个荒谬的结论。
+    ///
+    /// # 两个维度要分开
+    ///
+    /// - **某辆车此刻速度慢** → 影响它到达你这一站的时间（候车段），
+    ///   由 `wait_for_line` 里的 `travel_minutes` 体现
+    /// - **这一段路整体拥挤** → 影响你上车后要走多久（乘车段），
+    ///   用这里的运动状态惩罚来表达
+    ///
+    /// 基准速度始终取 `effective_kmh`（含按线路累积的学习结果），
+    /// 因此"从未观测过实时速度"的场景不受影响；
+    /// 只有真正判定为堵车时才额外打折。
+    ///
+    /// 静止的车起步后会恢复正常速度，所以惩罚是温和的（×0.9），
+    /// 而不是按 6 km/h 推算整段行程。
+    fn speed_for_motion(&self, _live_kmh: Option<f64>, motion: VehicleMotion) -> f64 {
+        // 基准：不采信"此刻速度"，因为那一刻的车速不代表整段路的通行能力
+        let nominal = self.effective_kmh(None);
+
+        let factor = match motion {
+            VehicleMotion::Stopped => 0.9,
+            _ => 1.0,
+        };
+        (nominal * factor).clamp(5.0, 60.0)
+    }
+
     /// 相对不确定度（变异系数）。
     ///
     /// 观测越多越确定；实时速度可用时也收窄。UI 用它决定 ETA 区间的宽度。
+    ///
+    /// # 为什么冷启动不能给太大的值
+    ///
+    /// 早期冷启动给到 0.45（合并后 0.55），配合堵车的 1.8 倍放宽，
+    /// 区间会宽到 ±99% —— 下界被压到接近 0，出现"2780 米 5 秒到达"
+    /// 这种物理上不可能的数字，而规划器恰好用的是下界，
+    /// 于是总耗时被严重低估。
+    ///
+    /// 现在冷启动从 0.42 起步、收敛到 0.12，并且在下游对区间宽度本身设上限。
     pub fn relative_uncertainty(&self, live_kmh: Option<f64>) -> f64 {
         let n = self.line_samples as f64;
-        // 无样本时 ±45%，20 个样本后收窄到约 ±18%
-        let mut cv = 0.45 / (1.0 + n / SAMPLE_HALFLIFE) + 0.10;
+        // 无样本时 ±42%，20 个样本后收窄到约 ±16%
+        let mut cv = 0.30 / (1.0 + n / SAMPLE_HALFLIFE) + 0.12;
         if live_kmh.is_some_and(|v| v >= 3.0) {
             cv *= 0.7;
         }
-        cv.clamp(0.05, 0.60)
+        cv.clamp(0.05, 0.45)
     }
 
     /// 行驶 `meters` 米所需分钟数的区间 `(下界, 上界)`。
     ///
-    /// 返回区间而非单值，是因为没有时刻表时 ETA 本质是概率分布。
+    /// 返回区间而非单值，是因为没有完整时刻表时 ETA 本质是概率分布。
     /// UI 直接渲染成"约 6-9 分钟"，比一个假装精确的"7 分钟"更诚实，
     /// 也更有用——用户关心的是"我赶不赶得上"。
     pub fn travel_minutes(&self, meters: f64, live_kmh: Option<f64>) -> (f64, f64) {
-        let kmh = self.effective_kmh(live_kmh).max(1.0);
+        self.travel_minutes_with_motion(meters, live_kmh, VehicleMotion::Unknown)
+    }
+
+    /// 带运动状态的版本 —— **实时修正 ETA 的核心**。
+    ///
+    /// # 三种状态分别怎么修正
+    ///
+    /// | 状态 | 中心值 | 区间 | 理由 |
+    /// |---|---|---|---|
+    /// | `Moving` | 不动 | **收窄 40%** | 车在动、速度可信，预测最准 |
+    /// | `AtStop` | **+0.6 分钟** | 不动 | 上下客要停一会儿，马上会走 |
+    /// | `Stopped` | 不动 | **放宽 1.8 倍**（下界不早于 +1 分钟） | 堵在路上，等多久说不准 |
+    /// | `Arrived` / `Unknown` | 不动 | 不动 | 无额外信息 |
+    ///
+    /// 之所以对"堵车"只放宽上界、不推迟中心值：用户最怕的是**误车**
+    /// （下界过低），而不是早到。所以下界保守、上界放宽才是对的取向。
+    pub fn travel_minutes_with_motion(
+        &self,
+        meters: f64,
+        live_kmh: Option<f64>,
+        motion: VehicleMotion,
+    ) -> (f64, f64) {
+        // 速度按运动状态选取：堵车时整段更慢，静止车辆不按"此刻速度"推算全程
+        let kmh = self.speed_for_motion(live_kmh, motion).max(1.0);
         let center = (meters / 1000.0) / kmh * 60.0;
         let cv = self.relative_uncertainty(live_kmh);
+
         // 至少 0.4 分钟的绝对余量，避免极短距离算出零宽区间
-        let spread = (center * cv).max(0.4);
-        ((center - spread).max(0.0), center + spread)
+        let mut spread = (center * cv).max(0.4);
+        let mut mid = center;
+
+        match motion {
+            VehicleMotion::Moving => {
+                // 车在动，速度信息可信 → 收窄
+                spread *= 0.6;
+            }
+            VehicleMotion::AtStop => {
+                // 上下客的固定开销
+                mid += 0.6;
+            }
+            VehicleMotion::Stopped => {
+                // 堵车更不可预测 → 放宽区间
+                spread *= 1.8;
+                mid = mid.max(1.0);
+            }
+            VehicleMotion::Arrived | VehicleMotion::Unknown => {}
+        }
+
+        // 区间宽度上限：不超过中心值的 60%。
+        //
+        // 没有这个上限时，冷启动（cv 较大）叠加堵车的 1.8 倍放宽，
+        // 会算出 ±99% 的区间，下界被压到接近 0 —— 出现"2780 米 5 秒到达"
+        // 这种物理上不可能的数字。而规划器恰好用下界参与总耗时累加，
+        // 于是整条方案的耗时被严重低估。
+        spread = spread.min((mid * 0.6).max(0.4));
+
+        ((mid - spread).max(0.0), mid + spread)
     }
 }
 
@@ -351,7 +499,7 @@ pub fn arrivals_for_stops(
                 None => 0,
             };
 
-            let (low, high) = model.travel_minutes(meters_away, v.speed_kmh);
+            let (low, high) = model.travel_minutes_with_motion(meters_away, v.speed_kmh, v.motion);
 
             let candidate = ArrivalView {
                 stop_id: stop.stop_id.clone(),
@@ -397,6 +545,75 @@ pub fn nearest_stop<'a>(stops: &'a [StopView], p: LngLat) -> Option<(usize, &'a 
 /// 计算站点表的总里程（供缓存与展示）
 pub fn path_total_meters(stops: &[LngLat]) -> f64 {
     cumulative_lengths(stops).last().copied().unwrap_or(0.0)
+}
+
+/// 从在线车辆的班次号反推**发车间隔**（分钟）。
+///
+/// # 为什么需要它
+///
+/// 上游只给"还没发车的班次时刻"（`plans`），**不给完整时刻表**。
+/// 于是"错过这班要等多久"没有直接答案。但在线车辆的 `busOrder`
+/// 是班次序号，相邻两辆车的序号差就是发车间隔：
+///
+/// ```text
+/// busOrder = [3, 13, 25, 26]  →  间隔 10, 12, 1
+/// ```
+///
+/// 取**中位数**而不是平均数：末尾出现的 `1` 通常是同一班次被拆成
+/// 两条记录（实测见过 busOrder 重复），或收班前的异常值，
+/// 用平均数会被它拉低一半。
+///
+/// 少于 3 辆车时不足以推断，返回 `None`（宁可不说，也不要给错的间隔）。
+pub fn estimate_headway_min(vehicles: &[VehicleView]) -> Option<f64> {
+    let mut orders: Vec<i64> = vehicles
+        .iter()
+        .filter(|v| !v.arrived)
+        .filter_map(|v| v.bus_order)
+        .collect();
+    if orders.len() < 3 {
+        return None;
+    }
+    orders.sort_unstable();
+    orders.dedup();
+
+    let mut gaps: Vec<f64> = orders
+        .windows(2)
+        .map(|w| (w[1] - w[0]) as f64)
+        .filter(|g| *g >= 1.0)
+        .collect();
+    if gaps.is_empty() {
+        return None;
+    }
+    gaps.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+    let mid = gaps.len() / 2;
+    let median = if gaps.len() % 2 == 0 {
+        // 偶数个取中间两个的平均
+        (gaps[mid - 1] + gaps[mid]) / 2.0
+    } else {
+        gaps[mid]
+    };
+
+    // 班次号差 ≈ 发车间隔（分钟）。市区公交间隔通常 3-30 分钟，
+    // 超出这个范围说明班次号不是连续编号（例如按当日累计班次编号），
+    // 此时宁可不给。
+    (2.0..=45.0).contains(&median).then_some(median)
+}
+
+/// 解析 `plans` 里的发车时刻为"距现在多少分钟"。
+///
+/// 输入是 `"HH:MM"`（可能带前后空格，实测有 `" 06:00-20:30"` 这类脏值
+/// 出现在别的字段，这里也要容忍）。**已过今天的时刻视为明天**，
+/// 因为末班车之后 `plans` 里的时刻只会是次日首班。
+pub fn minutes_until_departure(hhmm: &str, now_hhmm: &str) -> Option<f64> {
+    let then = crate::types::parse_hhmm(hhmm)?;
+    let now = crate::types::parse_hhmm(now_hhmm)?;
+    let mut diff = then - now;
+    if diff < -5 {
+        // 已经过去 5 分钟以上 → 明天的班次
+        diff += 24 * 60;
+    }
+    Some(diff.max(0) as f64)
 }
 
 #[cfg(test)]
@@ -534,6 +751,8 @@ mod tests {
             gps_time: Some("20261012220716".into()),
             age_seconds: Some(10),
             confidence: PositionConfidence::Live,
+            motion: VehicleMotion::Unknown,
+            distance_to_stop_m: None,
         };
 
         let a = arrivals_for_stops(&d, &[v.clone()], &model);
@@ -592,6 +811,8 @@ mod tests {
             gps_time: None,
             age_seconds: None,
             confidence: PositionConfidence::Stale,
+            motion: VehicleMotion::Unknown,
+            distance_to_stop_m: None,
         };
         assert!(
             arrivals_for_stops(&d, &[v], &model).is_empty(),
@@ -616,6 +837,8 @@ mod tests {
             gps_time: None,
             age_seconds: Some(10),
             confidence: PositionConfidence::Live,
+            motion: VehicleMotion::Unknown,
+            distance_to_stop_m: None,
         };
         // 后车比前车更靠近终点站？构造：两车都在起点附近，取更快到的
         let near = mk("near", 0.0, 1);
@@ -693,5 +916,284 @@ mod tests {
         assert_eq!(idx, 1);
         assert_eq!(s.stop_no, 2);
         assert!(dist < 100.0, "应命中第二站，实测 {dist:.1}m");
+    }
+
+    // -----------------------------------------------------------------------
+    // 运动状态判定
+    // -----------------------------------------------------------------------
+
+    fn raw_with_speed(speed: Option<f64>, arrived: bool) -> RawVehicle {
+        RawVehicle {
+            bus_id: "b".into(),
+            bus_no: None,
+            bus_order: Some(1),
+            bus_type: None,
+            gps_speed: speed,
+            gps_time: Some("20261013102000".into()),
+            lat: Some(30.5),
+            lng: Some(114.3),
+            arrived: Some(if arrived { 1 } else { 0 }),
+        }
+    }
+
+    /// 关键区分：速度为 0 时，"贴着站台"与"堵在路上"含义完全不同
+    #[test]
+    fn distinguishes_at_stop_from_stopped_in_traffic() {
+        let raw = raw_with_speed(Some(0.0), false);
+
+        assert_eq!(
+            classify_motion(&raw, false, Some(20.0)),
+            VehicleMotion::AtStop,
+            "贴着站台且速度为 0 应判为停站"
+        );
+        assert_eq!(
+            classify_motion(&raw, false, Some(400.0)),
+            VehicleMotion::Stopped,
+            "离站台远且速度为 0 应判为堵车"
+        );
+        // 边界：60 米内算停站
+        assert_eq!(classify_motion(&raw, false, Some(60.0)), VehicleMotion::AtStop);
+        assert_eq!(classify_motion(&raw, false, Some(61.0)), VehicleMotion::Stopped);
+    }
+
+    #[test]
+    fn moving_and_arrived_take_priority() {
+        assert_eq!(
+            classify_motion(&raw_with_speed(Some(25.0), false), false, Some(10.0)),
+            VehicleMotion::Moving
+        );
+        // 速度达到阈值即算行驶
+        assert_eq!(
+            classify_motion(&raw_with_speed(Some(3.0), false), false, Some(500.0)),
+            VehicleMotion::Moving
+        );
+        assert_eq!(
+            classify_motion(&raw_with_speed(Some(2.9), false), false, Some(500.0)),
+            VehicleMotion::Stopped
+        );
+        // 已到终点优先于一切
+        assert_eq!(
+            classify_motion(&raw_with_speed(Some(30.0), true), true, Some(5.0)),
+            VehicleMotion::Arrived
+        );
+    }
+
+    #[test]
+    fn unknown_speed_and_missing_coords_are_conservative() {
+        assert_eq!(
+            classify_motion(&raw_with_speed(None, false), false, Some(10.0)),
+            VehicleMotion::Unknown
+        );
+        // 有速度但没坐标可判断 → 保守当作堵车（宁可把 ETA 放宽）
+        assert_eq!(
+            classify_motion(&raw_with_speed(Some(0.0), false), false, None),
+            VehicleMotion::Stopped
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // ETA 随运动状态修正
+    // -----------------------------------------------------------------------
+
+    fn learned_model() -> SpeedModel {
+        let mut m = SpeedModel::new();
+        // 给足样本让历史权重接近上限，区间收窄到可比较的程度
+        for _ in 0..20 {
+            m.observe(1000.0, 180.0); // 20 km/h
+        }
+        m
+    }
+
+    /// 车在动 → 区间应比"状态未知"更窄（速度可信）
+    #[test]
+    fn moving_narrows_the_interval() {
+        let m = learned_model();
+        let (l0, h0) = m.travel_minutes_with_motion(3000.0, Some(20.0), VehicleMotion::Unknown);
+        let (l1, h1) = m.travel_minutes_with_motion(3000.0, Some(20.0), VehicleMotion::Moving);
+        assert!(
+            (h1 - l1) < (h0 - l0),
+            "行驶中应更确定：{:?} vs {:?}",
+            (l1, h1),
+            (l0, h0)
+        );
+    }
+
+    /// 停站 → 中心值应后移（上下客要花时间）
+    #[test]
+    fn at_stop_pushes_eta_later() {
+        let m = learned_model();
+        let unknown = m.travel_minutes_with_motion(2000.0, Some(0.0), VehicleMotion::Unknown);
+        let at_stop = m.travel_minutes_with_motion(2000.0, Some(0.0), VehicleMotion::AtStop);
+        let mid = |(l, h): (f64, f64)| (l + h) / 2.0;
+        assert!(
+            mid(at_stop) > mid(unknown),
+            "停站应比未知状态晚：{:.2} vs {:.2}",
+            mid(at_stop),
+            mid(unknown)
+        );
+    }
+
+    /// 堵车 → 上界必须放宽（用户最怕误车，所以宁可把最坏情况说保守）
+    #[test]
+    fn stopped_widens_the_interval_and_raises_floor() {
+        let m = learned_model();
+        let unknown = m.travel_minutes_with_motion(3000.0, Some(0.0), VehicleMotion::Unknown);
+        let stopped = m.travel_minutes_with_motion(3000.0, Some(0.0), VehicleMotion::Stopped);
+        assert!(
+            (stopped.1 - stopped.0) > (unknown.1 - unknown.0),
+            "堵车区间应更宽：{:?} vs {:?}",
+            stopped,
+            unknown
+        );
+        assert!(
+            stopped.0 >= 1.0,
+            "堵车时下界不应低于 1 分钟，实测 {:.2}",
+            stopped.0
+        );
+    }
+
+    #[test]
+    fn motion_adjustments_never_produce_negative_or_nan() {
+        let m = learned_model();
+        for motion in [
+            VehicleMotion::Moving,
+            VehicleMotion::AtStop,
+            VehicleMotion::Stopped,
+            VehicleMotion::Arrived,
+            VehicleMotion::Unknown,
+        ] {
+            for meters in [0.0, 1.0, 500.0, 20_000.0] {
+                for speed in [None, Some(0.0), Some(60.0)] {
+                    let (l, h) = m.travel_minutes_with_motion(meters, speed, motion);
+                    assert!(l.is_finite() && h.is_finite(), "{motion:?} 产生非有限值");
+                    assert!(l >= 0.0, "{motion:?} 下界为负：{l}");
+                    assert!(h >= l, "{motion:?} 上界小于下界：{l} > {h}");
+                }
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // 发车间隔推算
+    // -----------------------------------------------------------------------
+
+    fn veh(order: i64, arrived: bool) -> VehicleView {
+        VehicleView {
+            bus_id: format!("b{order}"),
+            bus_order: Some(order),
+            point: None,
+            speed_kmh: Some(20.0),
+            along_m: Some(0.0),
+            offset_m: None,
+            at_stop_no: Some(1),
+            next_stop_no: Some(2),
+            arrived,
+            gps_time: None,
+            age_seconds: Some(10),
+            confidence: PositionConfidence::Live,
+            motion: VehicleMotion::Moving,
+            distance_to_stop_m: None,
+        }
+    }
+
+    /// 用真实数据里的形态验证：687-0 的班次号实测为 [3,13,25,26]
+    #[test]
+    fn estimates_headway_from_real_order_pattern() {
+        let vs = vec![veh(3, false), veh(13, false), veh(25, false), veh(26, false)];
+        let h = estimate_headway_min(&vs).expect("应能推出发车间隔");
+        // 间隔是 10,12,1 → 中位数 10（用平均数会被末尾的 1 拉到 7.7）
+        assert!((9.0..=13.0).contains(&h), "应接近 10-12 分钟，实测 {h}");
+    }
+
+    /// 中位数而不是平均数：末尾异常值不应把结果拉低一半
+    #[test]
+    fn headway_uses_median_not_mean() {
+        let vs = vec![veh(10, false), veh(20, false), veh(30, false), veh(31, false)];
+        let h = estimate_headway_min(&vs).unwrap();
+        let mean = (10.0 + 10.0 + 1.0) / 3.0;
+        assert!(h > mean, "应取中位数 10，而不是平均数 {mean:.1}，实测 {h}");
+    }
+
+    #[test]
+    fn headway_needs_enough_vehicles() {
+        // 少于 3 辆车不足以推断 —— 宁可不说，也不要给错的间隔
+        assert!(estimate_headway_min(&[]).is_none());
+        assert!(estimate_headway_min(&[veh(5, false)]).is_none());
+        assert!(estimate_headway_min(&[veh(5, false), veh(15, false)]).is_none());
+        assert!(
+            estimate_headway_min(&[veh(5, false), veh(15, false), veh(25, false)]).is_some()
+        );
+    }
+
+    #[test]
+    fn headway_ignores_arrived_vehicles_and_duplicates() {
+        // 已到终点的车不参与；重复班次号去重后只剩一个 → 不足以推断
+        let vs = vec![veh(5, false), veh(5, false), veh(99, true)];
+        assert!(estimate_headway_min(&vs).is_none(), "去重后仅 1 个班次号");
+    }
+
+    #[test]
+    fn headway_rejects_implausible_values() {
+        // 班次号不是连续编号（例如按当日累计班次编号）时会算出巨大间隔，
+        // 此时宁可不给
+        let vs = vec![veh(1, false), veh(500, false), veh(1000, false)];
+        assert!(
+            estimate_headway_min(&vs).is_none(),
+            "间隔约 500 分钟不合理，应拒绝"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // 发车时刻解析
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn parses_departure_time_into_minutes() {
+        // 现在 10:22，计划 10:40 发车 → 18 分钟后
+        assert_eq!(minutes_until_departure("10:40", "10:22"), Some(18.0));
+        assert_eq!(minutes_until_departure("10:22", "10:22"), Some(0.0));
+        // 刚过去 3 分钟（在 5 分钟容差内）→ 视为现在，不跳到明天
+        assert_eq!(minutes_until_departure("10:19", "10:22"), Some(0.0));
+    }
+
+    #[test]
+    fn departure_in_the_past_rolls_to_tomorrow() {
+        // 现在 23:50，计划 05:30 → 次日首班，应约 340 分钟
+        let m = minutes_until_departure("05:30", "23:50").unwrap();
+        assert!((339.0..=341.0).contains(&m), "应跨到次日约 340 分钟，实测 {m}");
+    }
+
+    #[test]
+    fn rejects_malformed_departure_time() {
+        assert!(minutes_until_departure("", "10:00").is_none());
+        assert!(minutes_until_departure("25:00", "10:00").is_none());
+        assert!(minutes_until_departure("abc", "10:00").is_none());
+        assert!(minutes_until_departure("10:40", "").is_none());
+    }
+
+    /// 容错：实测别的字段里出现过 `" 06:00-20:30"` 这类带空格的脏值
+    #[test]
+    fn tolerates_whitespace_in_departure_time() {
+        assert_eq!(minutes_until_departure(" 10:40 ", "10:22"), Some(18.0));
+    }
+
+    /// 回归：`plans` 曾被断言恒为空（凌晨采样），白天实测有值。
+    /// 这个测试守住"字符串数组"这个真实结构，防止又被改回 Value。
+    #[test]
+    fn plans_field_parses_as_string_list() {
+        let d: crate::types::DetailData = serde_json::from_str(
+            r#"{"lineBusDtoList":[],"plans":["10:25","10:25","10:40","10:40","10:40"]}"#,
+        )
+        .unwrap();
+        assert_eq!(d.plans.len(), 5);
+        assert_eq!(d.plans[0], "10:25");
+
+        // 也要容忍空数组与缺失（收班时段就是空的）
+        let e: crate::types::DetailData =
+            serde_json::from_str(r#"{"lineBusDtoList":[],"plans":[]}"#).unwrap();
+        assert!(e.plans.is_empty());
+        let f: crate::types::DetailData =
+            serde_json::from_str(r#"{"lineBusDtoList":[]}"#).unwrap();
+        assert!(f.plans.is_empty());
     }
 }
