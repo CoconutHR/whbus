@@ -329,10 +329,17 @@ export function SettingsScreen({
               <Row label="服务地址">
                 <span className="t-cap t-3">customized.wuhanbus.com</span>
               </Row>
+              <Row label="已发请求">
+                <span className="tnum">{api?.requestCount ?? 0} 次</span>
+              </Row>
+              <Row label="平均往返">
+                <span className="tnum">{api?.avgMillis ?? 0} 毫秒</span>
+              </Row>
             </div>
           )}
           <div className="t-cap t-3" style={{ marginTop: "var(--space-2)" }}>
-            密钥每日轮换，过期后自动重新获取。
+            密钥每日轮换，过期后自动重新获取。线路站点表会长期缓存，
+            因此第二次规划几乎是瞬时的。
           </div>
         </Card>
       </section>

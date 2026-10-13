@@ -133,6 +133,12 @@ export interface ApiState {
   secretVersion: string | null;
   keyReady: boolean;
   serverHint: string | null;
+  /** 累计请求数（本次运行内） */
+  requestCount: number;
+  /** 累计网络往返耗时（毫秒，不含人为限流等待） */
+  requestMillis: number;
+  /** 平均每次往返耗时（毫秒） */
+  avgMillis: number;
 }
 
 export type LegKind = "walk" | "bus" | "wait" | "transfer";

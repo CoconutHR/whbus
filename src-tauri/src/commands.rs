@@ -282,9 +282,13 @@ pub async fn plan_journey(
     const MAX_DIRECT_LINES: usize = 6;
     const MAX_TRANSFER_LINES: usize = 8;
 
-    // ---- 1. 两侧周边站点（2 个请求）----
-    let origin_nearby = state.api.nearby(origin).await?;
-    let dest_nearby = state.api.nearby(destination).await?;
+    // ---- 1. 两侧周边站点（**并发**两个请求）----
+    //
+    // 早期是串行 await 两次，各自还要等一个全局 10 秒节流器，单这一步就 20 秒。
+    // 现在 /nearBy 有独立分组（2 秒间隔）且可并发，这一步降到一次往返的量级。
+    let (origin_nearby, dest_nearby) =
+        futures::future::try_join(state.api.nearby(origin), state.api.nearby(destination))
+            .await?;
 
     let to_candidates = |stops: &[NearbyStop]| -> Vec<journey::CandidateStop> {
         stops
@@ -343,9 +347,18 @@ pub async fn plan_journey(
         ..Default::default()
     };
 
-    // ---- 3. 直达候选的站点表（命中缓存则不发请求）----
-    for name in &shared {
-        load_line_pair(&state, &mut inputs, name).await;
+    // ---- 3. 直达候选的站点表（**并发**，命中缓存则不发请求）----
+    let direct_names: Vec<String> = shared.clone();
+    let direct_loaded = futures::future::join_all(
+        direct_names
+            .iter()
+            .map(|name| load_line_pair(&state, name)),
+    )
+    .await;
+    for (name, dirs) in direct_names.into_iter().zip(direct_loaded) {
+        if !dirs.is_empty() {
+            inputs.lines.insert(name, dirs);
+        }
     }
 
     // ---- 4. 换乘候选 —— 仅在没有直达方案时才做，且严格限量 ----
@@ -358,32 +371,44 @@ pub async fn plan_journey(
             .cloned()
             .collect();
         extra.dedup();
-        for name in &extra {
-            load_line_pair(&state, &mut inputs, name).await;
+
+        let extra_loaded = futures::future::join_all(
+            extra.iter().map(|name| load_line_pair(&state, name)),
+        )
+        .await;
+        for (name, dirs) in extra.into_iter().zip(extra_loaded) {
+            if !dirs.is_empty() {
+                inputs.lines.insert(name, dirs);
+            }
         }
     }
 
-    // ---- 5. 取在线车辆（每条方向一个请求，命中缓存无）----
-    // 先把 lineId 收集出来，避免在循环里同时借用 inputs 的两个字段
+    // ---- 5. 取在线车辆（**并发**，每条方向一个请求）----
     let all_line_ids: Vec<String> = inputs
         .lines
         .values()
         .flatten()
         .map(|d| d.base.line_id.clone())
+        .filter(|id| !inputs.vehicles.contains_key(id))
         .collect();
 
-    for line_id in all_line_ids {
-        if inputs.vehicles.contains_key(&line_id) {
-            continue;
-        }
-        let raw = match state.api.line_vehicles(&line_id).await {
-            Ok(v) => v,
-            // 单条线路取车辆失败不该让整个规划失败
-            Err(e) => {
-                log::warn!("取 {line_id} 在线车辆失败：{e}");
-                continue;
+    let fetched = futures::future::join_all(all_line_ids.iter().map(|line_id| {
+        let api = &state.api;
+        async move {
+            match api.line_vehicles(line_id).await {
+                Ok(v) => Some((line_id.clone(), v)),
+                // 单条线路取车辆失败不该让整个规划失败
+                Err(e) => {
+                    log::warn!("取 {line_id} 在线车辆失败：{e}");
+                    None
+                }
             }
-        };
+        }
+    }))
+    .await;
+
+    let now = transit::local_now_stamp();
+    for (line_id, raw) in fetched.into_iter().flatten() {
         let Some(detail) = inputs
             .lines
             .values()
@@ -392,7 +417,6 @@ pub async fn plan_journey(
         else {
             continue;
         };
-        let now = transit::local_now_stamp();
         let views: Vec<VehicleView> = raw
             .line_bus_dto_list
             .iter()
@@ -425,35 +449,43 @@ pub async fn plan_journey(
     Ok(options)
 }
 
-/// 把一条线路号的**所有方向**载入 `inputs.lines`，站点表走长期缓存。
+/// 载入一条线路号的**所有方向**，站点表走长期缓存。
 ///
 /// 一个方向一个 `LineDetail`：`/bus/detailData` 只返回单个方向的车辆，
 /// 站点表也是按方向给的。规划时需要两个方向都在，才能判断乘车方向。
-async fn load_line_pair(state: &AppState, inputs: &mut journey::PlanInputs, line_name: &str) {
-    if inputs.lines.contains_key(line_name) {
-        return;
-    }
-
-    // 先用 search 拿双向 lineId（明文接口，1 个请求）
+///
+/// 返回 `Vec` 而不是直接写进 `PlanInputs`，是为了让调用方能用
+/// `join_all` **并发**拉取多条线路——早期是串行 await，每条线路要等
+/// 一次检索 + 两次站点表，八条线路就串成几十秒。
+async fn load_line_pair(state: &AppState, line_name: &str) -> Vec<LineDetail> {
+    // 先用 search 拿双向 lineId（明文接口）
     let summaries = match state.api.search_exact(line_name).await {
         Ok(v) => v,
         Err(e) => {
             log::warn!("查询线路 {line_name} 失败：{e}");
-            return;
+            return Vec::new();
         }
     };
 
-    let mut details = Vec::new();
-    for s in summaries.iter().take(2) {
-        match state.line_detail_cached(&s.line_id).await {
-            Ok(d) => details.push(d),
-            Err(e) => log::warn!("取 {} 站点表失败：{e}", s.line_id),
-        }
-    }
+    // 两个方向的站点表也并发拉取
+    let details = futures::future::join_all(
+        summaries
+            .iter()
+            .take(2)
+            .map(|s| state.line_detail_cached(&s.line_id)),
+    )
+    .await;
 
-    if !details.is_empty() {
-        inputs.lines.insert(line_name.to_string(), details);
-    }
+    details
+        .into_iter()
+        .filter_map(|r| match r {
+            Ok(d) => Some(d),
+            Err(e) => {
+                log::warn!("取站点表失败：{e}");
+                None
+            }
+        })
+        .collect()
 }
 
 // ---------------------------------------------------------------------------

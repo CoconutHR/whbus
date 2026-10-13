@@ -37,7 +37,9 @@ reqwest = { version = "0.12", default-features = false, features = [
     "json",
     "rustls-tls",
 ] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }
+# 规划时需要并发拉取多条线路的站点表与车辆位置
+futures = "0.3"
 
 # geolocation 仅移动端可用（桌面端返回 0,0）
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]

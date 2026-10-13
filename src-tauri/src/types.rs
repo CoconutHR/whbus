@@ -683,6 +683,12 @@ pub struct ApiState {
     pub key_ready: bool,
     /// 服务端时间（由最近一次成功请求推断），用于校准本地时钟
     pub server_hint: Option<String>,
+    /// 累计发出的请求数（本次运行内）
+    pub request_count: u64,
+    /// 累计网络往返耗时（毫秒，不含人为限流等待）
+    pub request_millis: u64,
+    /// 平均每次往返耗时（毫秒）
+    pub avg_millis: u64,
 }
 
 #[cfg(test)]

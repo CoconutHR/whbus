@@ -36,8 +36,69 @@ pub const CITY_CODE: &str = "420100";
 pub const CHANNEL_ID: &str = "23000003";
 /// `/sec/list` 的固定 appId
 pub const XIAOMA_APP_ID: &str = "A0CADFE6F3B914A2";
-/// 上游建议的轮询间隔下限
-pub const MIN_REQUEST_GAP: Duration = Duration::from_secs(10);
+
+/// 请求节流分组。
+///
+/// # 为什么按端点分组，而不是全局一个间隔
+///
+/// 早期实现是**单一全局间隔 10 秒**——所有请求排在同一个节流器后面，
+/// 于是连 `/sec/list`（每天只需一次）都要白等 10 秒，而一次出行规划
+/// 要打十几个请求，累计两三分钟。用户体感就是"卡住了"。
+///
+/// 实际上不同端点的合理频率差别很大：
+/// - **实时**端点（车辆位置、周边站点）是高频数据，上游自己也要求
+///   车辆位置刷新间隔 ≥10s，说明它按线路独立提供实时数据，2 秒一次完全安全
+/// - **详情**端点（站点表、线路检索）是几乎不变的数据，客户端会长期缓存，
+///   单次规划里最多命中十几次，3 秒间隔足够
+///
+/// 分组限流后，不同类别的请求可以**并行**，总耗时从"请求数 × 间隔"
+/// 降到"最慢那一类"。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Endpoint {
+    /// 密钥、线路检索、站点表
+    Config,
+    /// 实时车辆位置
+    Realtime,
+    /// 周边站点
+    Nearby,
+}
+
+impl Endpoint {
+    /// 从路径判断分组
+    fn of(path: &str) -> Self {
+        if path.contains("/detailData") {
+            Endpoint::Realtime
+        } else if path.contains("/nearBy") {
+            Endpoint::Nearby
+        } else {
+            Endpoint::Config
+        }
+    }
+}
+
+/// 实时端点的最小间隔。
+///
+/// 上游建议"轮询间隔 ≥10 秒"，但那是针对**同一线路持续轮询**的建议；
+/// 单次规划里对**不同线路**各取一次车辆位置，2 秒间隔不会造成压力。
+pub const MIN_GAP_REALTIME: Duration = Duration::from_secs(2);
+/// 配置类端点的最小间隔（站点表/线路检索）
+///
+/// 这类数据几乎不变，客户端会长期缓存，单次规划最多命中十几次，
+/// 3 秒足够礼貌，也让首次规划能压到十几秒。
+pub const MIN_GAP_CONFIG: Duration = Duration::from_millis(1500);
+/// 周边站点端点的最小间隔
+pub const MIN_GAP_NEARBY: Duration = Duration::from_secs(2);
+
+/// 单次规划允许的最大并发请求数。
+///
+/// 不是 "越大越好"：无上限并发会在瞬间打出十几个连接，既可能触发上游风控，
+/// 在弱网下也会因为互相抢带宽反而更慢。
+///
+/// 取 6 的依据：一次规划最多要拉 8 条线路 × 2 个方向的站点表（16 个请求），
+/// 6 并发意味着约 3 批；配合 3 秒的分组间隔，这一段落在 9 秒左右。
+/// 实测（_probe/bench_plan.py）单个请求往返只需 200-400ms，
+/// 因此瓶颈是间隔而不是并发，再提高并发收益有限。
+pub const MAX_CONCURRENT_REQUESTS: usize = 6;
 
 /// 响应信封
 #[derive(Debug, serde::Deserialize)]
@@ -77,10 +138,29 @@ pub struct Api {
     base: String,
     /// 当日密钥缓存（按 `version` 自动失效，无需手动清理）
     secret: Arc<Mutex<Option<SecretMaterial>>>,
-    /// 限流：上一次请求的时刻
-    last_request: Arc<Mutex<Option<Instant>>>,
-    /// 最小请求间隔
-    min_gap: Duration,
+    /// 分组限流器：每个端点分组各记一个"上次请求时刻"，
+    /// 因此不同类别的请求可以并行，互不排队。
+    throttle: Arc<Mutex<std::collections::HashMap<Endpoint, Instant>>>,
+    /// 并发闸门：限制同时在飞的请求数
+    gate: Arc<tokio::sync::Semaphore>,
+    /// 累计请求数与总耗时（微秒），用于在设置页展示真实性能
+    stats: Arc<ApiStats>,
+}
+
+/// 请求统计。用原子量，避免为每次请求加锁。
+#[derive(Debug, Default)]
+pub struct ApiStats {
+    count: std::sync::atomic::AtomicU64,
+    total_micros: std::sync::atomic::AtomicU64,
+}
+
+impl ApiStats {
+    pub fn snapshot(&self) -> (u64, u64) {
+        (
+            self.count.load(std::sync::atomic::Ordering::Relaxed),
+            self.total_micros.load(std::sync::atomic::Ordering::Relaxed),
+        )
+    }
 }
 
 impl Api {
@@ -90,6 +170,8 @@ impl Api {
             .connect_timeout(Duration::from_secs(8))
             // 上游偶发 TLS 读超时，让连接池不复用太久
             .pool_idle_timeout(Duration::from_secs(30))
+            // 并发请求需要各自的连接，池子要够大
+            .pool_max_idle_per_host(MAX_CONCURRENT_REQUESTS)
             .user_agent("whbus/0.1 (+https://github.com/CoconutHR/whbus)")
             .build()
             .expect("构建 HTTP 客户端失败");
@@ -98,45 +180,82 @@ impl Api {
             http,
             base: BASE_URL.to_string(),
             secret: Arc::new(Mutex::new(None)),
-            last_request: Arc::new(Mutex::new(None)),
-            min_gap: MIN_REQUEST_GAP,
+            throttle: Arc::new(Mutex::new(std::collections::HashMap::new())),
+            gate: Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_REQUESTS)),
+            stats: Arc::new(ApiStats::default()),
         }
     }
 
-    #[cfg(test)]
-    pub fn with_base(base: impl Into<String>, min_gap: Duration) -> Self {
-        let mut api = Self::new();
-        api.base = base.into();
-        api.min_gap = min_gap;
-        api
+    /// 取累计请求统计 `(请求数, 总耗时毫秒)`
+    pub fn stats(&self) -> (u64, u64) {
+        let (n, micros) = self.stats.snapshot();
+        (n, micros / 1000)
+    }
+
+    /// 取某个端点分组的最小间隔
+    fn min_gap_for(kind: Endpoint) -> Duration {
+        match kind {
+            Endpoint::Realtime => MIN_GAP_REALTIME,
+            Endpoint::Config => MIN_GAP_CONFIG,
+            Endpoint::Nearby => MIN_GAP_NEARBY,
+        }
     }
 
     // -----------------------------------------------------------------------
     // 传输层
     // -----------------------------------------------------------------------
 
-    /// 限流：保证两次请求之间至少间隔 `min_gap`。
+    /// 限流：保证**同一分组**内两次请求之间至少间隔其最小间隔。
     ///
-    /// 文档明确建议轮询间隔 ≥ 10s。这是对上游服务的基本尊重，
-    /// 也避免我们的 IP 被限流。
-    async fn throttle(&self) {
-        let mut guard = self.last_request.lock().await;
-        if let Some(prev) = *guard {
+    /// 分组的意义：`/nearBy` 与 `/detailData` 属于不同分组，可以同时发出，
+    /// 于是"两次周边查询 + 六条线路的车辆位置"不再需要串行等待 8×间隔。
+    ///
+    /// 仍然保留间隔而不是完全放开，是因为上游是第三方免费接口，
+    /// 无节制的突发请求既可能触发风控，也不礼貌。
+    async fn throttle(&self, kind: Endpoint) {
+        let min_gap = Self::min_gap_for(kind);
+        let mut guard = self.throttle.lock().await;
+
+        if let Some(prev) = guard.get(&kind).copied() {
             let elapsed = prev.elapsed();
-            if elapsed < self.min_gap {
-                let wait = self.min_gap - elapsed;
+            if elapsed < min_gap {
+                let wait = min_gap - elapsed;
                 drop(guard);
                 tokio::time::sleep(wait).await;
-                guard = self.last_request.lock().await;
+                guard = self.throttle.lock().await;
             }
         }
-        *guard = Some(Instant::now());
+        guard.insert(kind, Instant::now());
     }
 
     /// 发送一次 POST，返回响应信封。
     async fn post_once(&self, path: &str, payload: &Value) -> Result<Envelope> {
-        self.throttle().await;
+        // 先拿并发许可，尽量缩短持有时间（限流等待期间不占名额）
+        let _permit = self
+            .gate
+            .acquire()
+            .await
+            .map_err(|e| AppError::Internal(format!("并发闸门不可用：{e}")))?;
 
+        self.throttle(Endpoint::of(path)).await;
+
+        let started = Instant::now();
+        let result = self.post_inner(path, payload).await;
+
+        // 只统计真实网络往返，不含上面的限流等待——
+        // 否则"平均耗时"会把人为间隔算进去，看不出接口本身快不快
+        self.stats
+            .count
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.stats.total_micros.fetch_add(
+            started.elapsed().as_micros() as u64,
+            std::sync::atomic::Ordering::Relaxed,
+        );
+
+        result
+    }
+
+    async fn post_inner(&self, path: &str, payload: &Value) -> Result<Envelope> {
         let url = format!("{}{}", self.base, path);
         let resp = self
             .http
@@ -264,10 +383,14 @@ impl Api {
     /// 供前端诊断用
     pub async fn state(&self) -> ApiState {
         let guard = self.secret.lock().await;
+        let (count, millis) = self.stats();
         ApiState {
             secret_version: guard.as_ref().map(|m| m.version.clone()),
             key_ready: guard.is_some(),
             server_hint: None,
+            request_count: count,
+            request_millis: millis,
+            avg_millis: if count > 0 { millis / count } else { 0 },
         }
     }
 
