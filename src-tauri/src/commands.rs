@@ -325,12 +325,24 @@ pub async fn plan_journey(
     let origin_stops = to_candidates(&origin_nearby);
     let dest_stops = to_candidates(&dest_nearby);
 
+    log::info!(
+        "规划开始：起点 {} 周边 {} 站 / 终点 {} 周边 {} 站 / 出发偏移 {:?} 分 / 到达约束 {:?} 分",
+        origin,
+        origin_stops.len(),
+        destination,
+        dest_stops.len(),
+        query.depart_offset_min.or(query.depart_after_min),
+        query.arrive_before_min
+    );
+
     if origin_stops.is_empty() {
+        log::warn!("规划失败：起点周边 400 米内没有公交站（{origin}）");
         return Err(AppError::BadCoord(
             "起点周边 400 米内没有查到公交站".into(),
         ));
     }
     if dest_stops.is_empty() {
+        log::warn!("规划失败：终点周边 400 米内没有公交站（{destination}）");
         return Err(AppError::BadCoord(
             "终点周边 400 米内没有查到公交站".into(),
         ));
@@ -358,6 +370,13 @@ pub async fn plan_journey(
         .cloned()
         .collect();
 
+    log::info!(
+        "候选线路：起点侧 {:?} / 终点侧 {:?} / 共有（直达）{:?}",
+        origin_lines,
+        dest_lines,
+        shared
+    );
+
     let mut inputs = journey::PlanInputs {
         origin_stops,
         dest_stops,
@@ -366,6 +385,7 @@ pub async fn plan_journey(
 
     // ---- 3. 直达候选的站点表（**并发**，命中缓存则不发请求）----
     let direct_names: Vec<String> = shared.clone();
+    let direct_names_len = direct_names.len();
     let direct_loaded = futures::future::join_all(
         direct_names
             .iter()
@@ -373,13 +393,23 @@ pub async fn plan_journey(
     )
     .await;
     for (name, dirs) in direct_names.into_iter().zip(direct_loaded) {
-        if !dirs.is_empty() {
+        if dirs.is_empty() {
+            // 站点表拉不到就没法算里程与站序，这条线路等于废掉。
+            // 这是"给不出方案"最常见的原因之一，必须记下来。
+            log::warn!("直达候选线路 {name} 的站点表为空，已跳过");
+        } else {
             inputs.lines.insert(name, dirs);
         }
     }
+    log::info!(
+        "直达阶段：可用线路 {} 条（候选 {} 条）",
+        inputs.lines.len(),
+        direct_names_len
+    );
 
     // ---- 4. 换乘候选 —— 仅在没有直达方案时才做，且严格限量 ----
     if shared.is_empty() {
+        log::info!("无直达线路，转入一次换乘搜索");
         let mut extra: Vec<String> = origin_lines
             .iter()
             .chain(dest_lines.iter())
@@ -442,24 +472,68 @@ pub async fn plan_journey(
         inputs.vehicles.insert(line_id, views);
     }
 
+    // 出发时刻：取 `departOffsetMin`（新字段）或 `departAfterMin`（旧字段名）。
+    // 两者同义，保留旧名是为了兼容已装机的版本。
+    let depart_offset = query
+        .depart_offset_min
+        .or(query.depart_after_min)
+        .unwrap_or(0)
+        .max(0) as f64;
+
     let plan_opts = journey::PlanOptions {
         walk_speed_m_per_min: query.walk_speed_m_per_min.unwrap_or(75.0),
         max_options: query.max_options.unwrap_or(5),
+        depart_offset_min: depart_offset,
         ..Default::default()
     };
 
     let mut options = journey::plan_from(origin, destination, &inputs, &plan_opts);
 
-    // ---- 6. 若有到达时间约束，反推最晚出发时刻 ----
+    if options.is_empty() {
+        // 这一条最重要：用户看到"暂时给不出方案"时，日志里要有足够线索
+        log::warn!(
+            "规划无结果：候选线路 {} 条已加载站点表、{} 条已取到实时车辆；             可能原因是候选车均已驶过上车站，或线路不在运营时段",
+            inputs.lines.len(),
+            inputs.vehicles.len()
+        );
+    } else {
+        log::info!(
+            "规划完成：{} 个方案，最优 {} 分钟（{} 段，换乘 {} 次）",
+            options.len(),
+            options[0].total_minutes as i64,
+            options[0].legs.len(),
+            options[0].transfers
+        );
+    }
+
+    // ---- 6. 若有"最晚到达"约束，据此给每个方案算出可接受的出发上限 ----
+    //
+    // 注意语义：`depart_offset_min` 是用户**想几点走**，
+    // 而 `arrive_before_min` 是用户**必须几点前到**。
+    // 两者同时给时以后者为准来反推出发上限，但时间轴仍以
+    // `depart_offset_min` 为基准 —— 这样"出发 18:30、到达 19:10、
+    // 最晚 19:00 前到（已超）"是一致可读的，不会出现出发晚于到达。
     if let Some(deadline) = query.arrive_before_min {
+        let deadline = deadline as f64;
         for o in &mut options {
-            o.latest_depart_offset_min = journey::latest_departure(o, deadline as f64);
+            // 该方案最晚可以几点出发（相对现在）
+            o.latest_depart_offset_min = journey::latest_departure(o, deadline);
+            o.tags.push(if o.arrive_offset_min <= deadline + 0.5 {
+                "赶得上".into()
+            } else {
+                "会迟到".into()
+            });
         }
-        // 来不及的方案排到最后，但仍展示（用户可能愿意接受迟到）
+        // 赶得上的排前面；同组内按到达时刻升序
         options.sort_by(|a, b| {
-            b.latest_depart_offset_min
-                .partial_cmp(&a.latest_depart_offset_min)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            let ka = a.arrive_offset_min <= deadline + 0.5;
+            let kb = b.arrive_offset_min <= deadline + 0.5;
+            kb.cmp(&ka)
+                .then(
+                    a.arrive_offset_min
+                        .partial_cmp(&b.arrive_offset_min)
+                        .unwrap_or(std::cmp::Ordering::Equal),
+                )
         });
     }
 
@@ -623,4 +697,234 @@ pub async fn reverse_geocode(
         AppError::BadRequest("尚未配置高德 Key".into())
     })?;
     state.amap.regeocode(&key, LngLat::from(point)).await
+}
+
+// ---------------------------------------------------------------------------
+// 日志
+// ---------------------------------------------------------------------------
+
+/// 读取最近的日志（最新的在最后）。
+///
+/// UI 用来展示"刚才那次失败到底卡在哪一步"。默认取 300 条，
+/// 足以覆盖一次完整的规划流程而不至于让 WebView 传输太多文本。
+#[tauri::command]
+pub fn get_logs(limit: Option<usize>) -> Vec<crate::applog::LogEntry> {
+    let n = limit.unwrap_or(300).min(crate::applog::CAPACITY_PUBLIC);
+    crate::applog::recent(n)
+}
+
+/// 清空内存中的日志缓冲（磁盘文件保留，便于对照历史）
+#[tauri::command]
+pub fn clear_logs() {
+    crate::applog::clear();
+    log::info!("用户清空了日志缓冲");
+}
+
+/// 把最近日志导出成文本文件，返回路径。
+///
+/// 返回路径而不是内容：日志可能有几百 KB，走 IPC 传字符串不划算，
+/// 而且导出后用户可以直接用系统的"分享"功能发出来。
+#[tauri::command]
+pub fn export_logs() -> Result<String> {
+    match crate::applog::export() {
+        Ok(p) => {
+            log::info!("日志已导出到 {p:?}");
+            Ok(p.to_string_lossy().to_string())
+        }
+        Err(e) => Err(AppError::Internal(format!("导出日志失败：{e}"))),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 更新检查
+// ---------------------------------------------------------------------------
+
+/// GitHub Release 的最新版本信息（前端据此展示与跳转）
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReleaseInfo {
+    pub version: String,
+    pub published_at: String,
+    pub notes: String,
+    /// 全部资产名（前端按架构挑 APK）
+    pub assets: Vec<String>,
+}
+
+/// 把 `v0.2.0` / `0.2.0` / `v0.2` 解析成可比较的数字序列。
+///
+/// 只取数字段，忽略 `-beta` 之类的预发布后缀 —— 当前项目不发预发布版，
+/// 为它写完整语义化版本比较不划算。
+fn parse_version(v: &str) -> Vec<u64> {
+    v.trim()
+        .trim_start_matches('v')
+        .split(['.', '-', '+'])
+        .take(3)
+        .map(|seg| {
+            // 段内只取前导数字：`0` 与 `0rc1` 都算 0
+            let digits: String = seg.chars().take_while(|c| c.is_ascii_digit()).collect();
+            digits.parse::<u64>().unwrap_or(0)
+        })
+        .collect()
+}
+
+/// `a` 是否比 `b` 新。缺失的段按 0 处理，所以 `0.2` 与 `0.2.0` 相等。
+fn is_newer(a: &str, b: &str) -> bool {
+    let (va, vb) = (parse_version(a), parse_version(b));
+    for i in 0..va.len().max(vb.len()) {
+        let x = va.get(i).copied().unwrap_or(0);
+        let y = vb.get(i).copied().unwrap_or(0);
+        if x != y {
+            return x > y;
+        }
+    }
+    false
+}
+
+/// 检查 GitHub 上是否有更新版本。
+///
+/// 返回 `None` 表示**已是最新**；返回 `Some` 表示有新版本。
+/// 网络异常会走 `Err`，由前端显示为"检查失败"——
+/// **绝不能把失败说成"已是最新"**，那是在骗用户。
+#[tauri::command]
+pub async fn check_update(
+    state: State<'_, AppState>,
+    current: String,
+) -> Result<Option<ReleaseInfo>> {
+    log::info!("检查更新：当前版本 {current}");
+
+    let url = "https://api.github.com/repos/CoconutHR/whbus/releases/latest";
+    let resp = state
+        .api
+        .http()
+        .get(url)
+        .header("Accept", "application/vnd.github+json")
+        // GitHub API 对匿名请求限流较严，带 UA 是必需的礼貌
+        .header("User-Agent", "whbus-app")
+        .send()
+        .await
+        .map_err(|e| AppError::Http(format!("访问 GitHub 失败：{e}")))?;
+
+    let status = resp.status();
+    if !status.is_success() {
+        log::warn!("检查更新失败：GitHub 返回 {status}");
+        return Err(AppError::Http(format!(
+            "GitHub 返回 {status}（可能是网络受限或触发限流）"
+        )));
+    }
+
+    let body: serde_json::Value = resp
+        .json()
+        .await
+        .map_err(|e| AppError::Http(format!("解析 Release 信息失败：{e}")))?;
+
+    let tag = body
+        .get("tag_name")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    if tag.is_empty() {
+        return Err(AppError::Http("Release 信息缺少 tag_name".into()));
+    }
+
+    if !is_newer(&tag, &current) {
+        log::info!("已是最新版本（远端 {tag}，本地 {current}）");
+        return Ok(None);
+    }
+
+    let published_at = body
+        .get("published_at")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+
+    // 更新说明只取前 12 行：Release body 可能很长，UI 里也只展示摘要
+    let notes = body
+        .get("body")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .lines()
+        .take(12)
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let assets = body
+        .get("assets")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|a| a.get("name").and_then(|n| n.as_str()).map(String::from))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    log::info!("发现新版本 {tag}，资产 {} 个", assets.len());
+    Ok(Some(ReleaseInfo {
+        version: tag,
+        published_at,
+        notes,
+        assets,
+    }))
+}
+
+// ---------------------------------------------------------------------------
+// 预加载
+// ---------------------------------------------------------------------------
+
+/// 预热若干条线路的站点表与实时车辆，降低首次规划的等待。
+///
+/// # 为什么值得做
+///
+/// 一次规划要拉 8-16 条线路的站点表（每条 = 一次检索 + 两次站点表）。
+/// 实测冷启动约 10-20 秒，而站点表当天不会变、命中缓存后是 0 请求。
+/// 于是"用户打开 App 的那几秒"是白送的预热窗口 —— 用它把常用线路
+/// 先拉进缓存，用户真正点「开始规划」时往往直接命中。
+///
+/// # 为什么要限量
+///
+/// 上游限流按端点分组（实时 2 秒 / 配置 1.5 秒）。一口气预加载十几条
+/// 线路既会拖慢首屏，也可能触发服务端风控。所以这里：
+/// - 最多 max_lines 条（默认 6）
+/// - 分批而非一次性并发，给限流器留出节奏
+/// - 全部失败都不算错（预加载本就是尽力而为）
+#[tauri::command]
+pub async fn preload_lines(
+    state: State<'_, AppState>,
+    line_names: Vec<String>,
+    max_lines: Option<usize>,
+) -> Result<usize> {
+    let cap = max_lines.unwrap_or(6).min(20);
+    let mut names: Vec<String> = line_names
+        .into_iter()
+        .map(|n| n.trim().to_string())
+        .filter(|n| !n.is_empty())
+        .collect();
+    names.dedup();
+    names.truncate(cap);
+
+    if names.is_empty() {
+        return Ok(0);
+    }
+    log::info!("开始预加载 {} 条线路：{:?}", names.len(), names);
+
+    // 每批 3 条：与限流器的并发上限（6）留出余量，
+    // 避免预加载把用户随后那次真实规划挤在后面排队。
+    let mut loaded = 0usize;
+    for chunk in names.chunks(3) {
+        let results = futures::future::join_all(
+            chunk.iter().map(|name| load_line_pair(&state, name)),
+        )
+        .await;
+        for (name, dirs) in chunk.iter().zip(results) {
+            if dirs.is_empty() {
+                log::debug!("预加载 {name} 无结果（可能不在运营时段或站名不精确）");
+            } else {
+                loaded += dirs.len();
+            }
+        }
+        // 批次之间稍作停顿，给上游限流器留节奏
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    }
+
+    log::info!("预加载完成：{loaded} 个方向已进缓存");
+    Ok(loaded)
 }

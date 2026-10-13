@@ -21,6 +21,7 @@ import type {
   LineSummary,
   NearbyStop,
   StopSummary,
+  LogEntry,
 } from "./types";
 
 /**
@@ -170,3 +171,31 @@ export const walkingRoute = (from: GeoPoint, to: GeoPoint) =>
 /** 坐标 → 地址 */
 export const reverseGeocode = (point: GeoPoint) =>
   call<Place | null>("reverse_geocode", { point });
+
+// ---------------------------------------------------------------------------
+// 日志
+// ---------------------------------------------------------------------------
+
+/** 读取最近的应用日志（最新的在最后） */
+export const getLogs = (limit?: number) =>
+  call<LogEntry[]>("get_logs", { limit: limit ?? null });
+
+/** 清空内存中的日志缓冲（磁盘文件保留） */
+export const clearLogs = () => call<void>("clear_logs");
+
+/**
+ * 把日志导出成文本文件，返回文件路径。
+ *
+ * 返回路径而不是内容：日志可能几百 KB，走 IPC 传字符串不划算；
+ * 拿到路径后可以直接交给系统的分享功能。
+ */
+export const exportLogs = () => call<string>("export_logs");
+
+/**
+ * 预热若干条线路的站点表（打开 App 时后台调用）。
+ *
+ * 返回成功载入的方向数；**失败不代表功能异常**，
+ * 只是没有预热、首次规划仍需等一次冷启动。
+ */
+export const preloadLines = (lineNames: string[], maxLines?: number) =>
+  call<number>("preload_lines", { lineNames, maxLines: maxLines ?? null });

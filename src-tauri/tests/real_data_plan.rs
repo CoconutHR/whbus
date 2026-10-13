@@ -271,7 +271,7 @@ fn real_data_produces_a_transfer_plan() {
         );
     }
     assert!(
-        (best.legs.last().unwrap().end_offset_min - best.total_minutes).abs() < 1e-6,
+        (best.legs.last().unwrap().end_offset_min - best.arrive_offset_min).abs() < 1e-6,
         "最后一段的结束时刻必须等于总耗时"
     );
 
@@ -512,6 +512,110 @@ fn real_data_never_produces_impossible_durations() {
             }
         }
     }
+}
+
+/// 出发时刻偏移必须让时间轴整体平移，且**出发一定早于到达**。
+///
+/// # 这个测试守的是什么 bug
+///
+/// 用户设"最晚 20:00 到达"时，早期实现用 `deadline - 总耗时` 反推出发，
+/// 却仍把"从现在起算的耗时"当到达时刻。于是当总耗时 40 分钟、现在 18:00 时：
+///   最晚出发 = 20:00 − 40 分 = 19:20（即 80 分钟后）
+///   到达时刻 = 现在 + 40 分 = 18:40
+/// **出发时间比到达时间还晚** —— 时间轴自相矛盾。
+///
+/// 根因是所有方案都从 0 起算。加上 `depart_offset_min` 后：
+///   arrive_offset_min = depart_offset_min + total
+/// 不变量成立：出发 ≤ 到达。
+#[test]
+fn depart_offset_shifts_timeline_and_stays_before_arrival() {
+    let fx = load();
+    let origin = LngLat::new(fx.origin.lng, fx.origin.lat);
+    let dest = LngLat::new(fx.dest.lng, fx.dest.lat);
+
+    let plan_with = |depart: f64| {
+        let inputs = build_inputs(&fx);
+        let opts = PlanOptions {
+            depart_offset_min: depart,
+            ..Default::default()
+        };
+        plan_from(origin, dest, &inputs, &opts)
+    };
+
+    let base = plan_with(0.0);
+    assert!(!base.is_empty(), "基准方案不该为空");
+    let later = plan_with(120.0);
+    assert!(!later.is_empty(), "推迟两小时后仍应能规划");
+
+    for (i, o) in later.iter().enumerate() {
+        // ① 不变量：出发不晚于到达
+        assert!(
+            o.latest_depart_offset_min <= o.arrive_offset_min + 1e-6,
+            "方案 {i} 的出发时刻 {:.1} 晚于到达时刻 {:.1}",
+            o.latest_depart_offset_min,
+            o.arrive_offset_min
+        );
+
+        // ② 时间轴确实平移了 120 分钟
+        assert!(
+            (o.latest_depart_offset_min - 120.0).abs() < 1e-6,
+            "方案 {i} 的出发时刻应为 120，实测 {:.2}",
+            o.latest_depart_offset_min
+        );
+
+        // ③ 第一段从出发时刻开始
+        let first = o.legs.first().expect("方案至少有一段");
+        assert!(
+            (first.start_offset_min - 120.0).abs() < 1e-6,
+            "方案 {i} 的首段应从 120 开始，实测 {:.2}",
+            first.start_offset_min
+        );
+
+        // ④ 耗时不因出发时刻改变（同一套实时数据）
+        let base_total = base[0].total_minutes;
+        assert!(
+            (o.total_minutes - base_total).abs() < 1e-6,
+            "方案 {i} 的耗时不该随出发时刻变化：{:.2} vs {:.2}",
+            o.total_minutes,
+            base_total
+        );
+
+        // ⑤ 到达 = 出发 + 耗时
+        assert!(
+            (o.arrive_offset_min - (o.latest_depart_offset_min + o.total_minutes)).abs() < 1e-6,
+            "方案 {i} 的到达时刻应等于出发 + 耗时"
+        );
+
+        // ⑥ 各段连续，无重叠无空隙
+        for w in o.legs.windows(2) {
+            assert!(
+                (w[1].start_offset_min - w[0].end_offset_min).abs() < 1e-6,
+                "方案 {i} 的时间轴不连续：{:.2} → {:.2}",
+                w[0].end_offset_min,
+                w[1].start_offset_min
+            );
+        }
+    }
+}
+
+/// 不带出发偏移时（默认 0），行为与改造前一致 —— 防止回归。
+#[test]
+fn zero_depart_offset_keeps_legacy_shape() {
+    let fx = load();
+    let origin = LngLat::new(fx.origin.lng, fx.origin.lat);
+    let dest = LngLat::new(fx.dest.lng, fx.dest.lat);
+    let inputs = build_inputs(&fx);
+    let plans = plan_from(origin, dest, &inputs, &PlanOptions::default());
+
+    assert!(!plans.is_empty());
+    assert!(
+        plans[0].latest_depart_offset_min.abs() < 1e-6,
+        "默认应从 0 起算"
+    );
+    assert!(
+        plans[0].legs[0].start_offset_min.abs() < 1e-6,
+        "默认首段应从 0 开始"
+    );
 }
 
 #[test]

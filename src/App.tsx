@@ -11,6 +11,7 @@ import { SettingsScreen } from "./screens/SettingsScreen";
 import { isTauri } from "./lib/api";
 import { useAppStore } from "./lib/store";
 import "./App.css";
+import { startPreload } from "./lib/preload";
 
 export type ThemeMode = "system" | "light" | "dark";
 
@@ -37,6 +38,25 @@ export default function App() {
     applyTheme(theme);
     localStorage.setItem(THEME_KEY, theme);
   }, [theme]);
+
+  /**
+   * 启动预加载常用线路的站点表。
+   *
+   * 放在空闲时执行：预加载要占用上游限流额度，如果和首屏的
+   * "附近站点"查询抢带宽，用户反而觉得 App 更慢了 ——
+   * 而它的全部意义就是让后续规划更快。
+   *
+   * 只跑一次；依赖列表留空是刻意的（收藏变化时不需要重跑，
+   * 用户真正规划时自然会把新线路拉进缓存）。
+   */
+  useEffect(() => {
+    const { favorites, places } = useAppStore.getState();
+    startPreload({
+      favorites,
+      places: Object.values(places).filter((p): p is NonNullable<typeof p> => Boolean(p)),
+    });
+     
+  }, []);
 
   /**
    * 接管安卓返回键。
@@ -111,11 +131,11 @@ export default function App() {
 
       {/* 追踪条位于 Tab 栏正上方：属于会话状态，优先级高于切页 */}
       <TrackingBar
-        onOpen={(lineName) => {
-          // 追踪条给的是线路号，需要换成 lineId 才能打开详情。
-          // 这里不额外请求：线路页自己会解析，所以先切到线路页更稳。
-          void lineName;
-          setTab("lines");
+        onOpen={(lineId) => {
+          // 直接打开该方向的线路详情。
+          // 早期这里只 setTab("lines") 而没有设置 openLineId ——
+          // 于是用户点「开始导航」后看到的是一片空白（bug）。
+          setOpenLineId(lineId);
         }}
       />
 

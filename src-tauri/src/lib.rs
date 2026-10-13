@@ -10,6 +10,7 @@
 
 pub mod amap;
 pub mod api;
+pub mod applog;
 pub mod commands;
 pub mod gcj;
 pub mod journey;
@@ -25,6 +26,9 @@ pub type Result<T> = std::result::Result<T, AppError>;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // 日志必须在 Builder 之前装好，否则 Builder 期间的日志会丢
+    applog::install();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
@@ -48,13 +52,29 @@ pub fn run() {
             commands::search_place,
             commands::walking_route,
             commands::reverse_geocode,
+            commands::get_logs,
+            commands::clear_logs,
+            commands::export_logs,
+            commands::check_update,
+            commands::preload_lines,
         ])
         .setup(|app| {
+            use tauri::Manager;
+
+            // 把日志文件定位到应用数据目录（与高德 Key 同目录，均属应用私有）
+            if let Ok(dir) = app.path().app_data_dir() {
+                applog::attach_file(dir);
+            }
+            log::info!(
+                "应用启动，版本 {}，日志文件 {:?}",
+                env!("CARGO_PKG_VERSION"),
+                applog::file_path()
+            );
+
             // geolocation 是 mobile-only 插件：桌面端不存在该 crate，
             // 因此注册必须放在 cfg(mobile) 内。
             #[cfg(mobile)]
             {
-                use tauri::Manager;
                 app.handle()
                     .plugin(tauri_plugin_geolocation::init())
                     .expect("failed to init geolocation plugin");

@@ -651,7 +651,22 @@ pub struct ArrivalView {
 pub struct JourneyQuery {
     pub origin: GeoPoint,
     pub destination: GeoPoint,
-    /// 最早可出发时间（分钟偏移，0 = 现在）
+    /// 相对**现在**的出发时刻偏移（分钟）。
+    ///
+    /// # 为什么需要这个字段
+    ///
+    /// 早期只有"从现在出发"一种模式，所有方案的时间轴都从 0 开始，
+    /// `arrive_offset_min` 直接等于总耗时。用户设"最晚 20:00 到达"时，
+    /// 前端拿 `deadline - total` 反推最晚出发，却仍用 `total` 当到达时刻 ——
+    /// 于是就出现**出发时间比到达时间还晚**这种自相矛盾的结果。
+    ///
+    /// 有了出发偏移后：
+    /// - `arrive_offset_min = depart_offset_min + total_minutes`
+    /// - `latest_depart_offset_min = depart_offset_min`
+    /// 时间轴成为一条从真实出发时刻起算的连续线。
+    #[serde(default)]
+    pub depart_offset_min: Option<i64>,
+    /// 最早可出发时间（分钟偏移）—— 与 `depart_offset_min` 同义，早期字段名
     #[serde(default)]
     pub depart_after_min: Option<i64>,
     /// 必须在此刻之前到达（分钟偏移，可选）

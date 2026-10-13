@@ -82,11 +82,46 @@ a {
   text-decoration: none;
 }
 
-/* 可见焦点环（仅键盘） */
+/*
+  可见焦点环（仅键盘导航时出现）。
+
+  ⚠️ 这里曾经有三处会导致「焦点圈位置不对」，都已修掉：
+
+  1. **`outline-offset: 2px`** —— 让圈画在元素**外面**。
+     输入框往往贴边或被卡片裁切，圈就会被切掉一半，
+     看起来"位置偏了"。改成负偏移（-2px）画在**里面**，永远完整。
+
+  2. **`border-radius` 覆盖** —— 旧规则无条件把圆角改成 `--r-sm`，
+     于是圆形按钮（清除按钮、关闭按钮）的焦点圈变成圆角方块，
+     与控件本身形状不符。现在用 `border-radius: inherit` 跟随控件。
+
+  3. **与输入框自带的 focus 样式叠加** —— 见下方 `input:focus`，
+     那里统一处理输入类控件的聚焦表达，且**只有一处**在画环
+     （搜索框的包裹层也曾经自己画一个，会形成双重环）。
+*/
 :focus-visible {
   outline: 2px solid var(--brand);
-  outline-offset: 2px;
-  border-radius: var(--r-sm);
+  /* 负偏移 = 画在元素内侧，不会被父容器裁切 */
+  outline-offset: -2px;
+  /* 跟随控件自身的圆角，圆形按钮就得到圆形焦点圈 */
+  border-radius: inherit;
+}
+
+/*
+  输入类控件的聚焦表达：**唯一来源**。
+
+  它们的边框本来就会变色，所以不需要再叠一圈 outline；
+  用与控件圆角一致的软阴影作为焦点环，视觉上与输入框是一个整体。
+
+  注意：用 `:focus` 而不是 `:focus-visible` —— 输入框只要获得焦点
+  就应该明确高亮（因为紧接着就要打字），这与按钮不同。
+*/
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
 }
 
 /* 数字用等宽字形：倒计时跳动时不会左右抖动 */

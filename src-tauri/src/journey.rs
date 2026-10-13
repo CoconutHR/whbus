@@ -50,6 +50,15 @@ pub struct PlanOptions {
     pub max_options: usize,
     /// 单个站点最多考虑几条线路（按线路号排序取前 N，控制搜索空间）
     pub max_lines_per_stop: usize,
+    /// 从**现在**起算的出发时刻偏移（分钟）。0 = 立刻出发。
+    ///
+    /// 所有段的时间轴会整体平移这个量，于是方案成为一条从真实出发时刻
+    /// 起算的连续线，`arrive_offset_min` 才是用户真正看到的"几点到"。
+    ///
+    /// 早期没有这个字段，所有方案都从 0 起算，`arrive_offset_min` 直接
+    /// 等于总耗时；用户设"最晚 20:00 到达"时，前端用 `deadline - total`
+    /// 反推出发时刻，却仍把 `total` 当到达时刻 —— **出发比到达还晚**。
+    pub depart_offset_min: f64,
 }
 
 impl Default for PlanOptions {
@@ -60,6 +69,7 @@ impl Default for PlanOptions {
             transfer_buffer_min: 2.0,
             max_options: 5,
             max_lines_per_stop: 12,
+            depart_offset_min: 0.0,
         }
     }
 }
@@ -265,7 +275,15 @@ fn find_direct(
                     let board_m = detail.cumulative_meters[bi];
                     let alight_m = detail.cumulative_meters[ai];
 
-                    let walk1 = walk_minutes(distance_m(origin, board_stop.point), opts);
+                    // 第一段步行**包含**出门准备时间（锁门、等电梯）。
+                    //
+                    // 为什么并进去而不是单列一段：`boarding_overhead_min` 一直
+                    // 被算进总耗时，却没有任何一段承载它，于是时间轴的最后
+                    // 时刻与 `arrive_offset_min` 天然差这 1 分钟 ——
+                    // 测试里的"最后一段终点必须等于到达时刻"就是被这个卡住的。
+                    // 并进首段后不变量成立，而且"出门准备"本来也是走路前的事。
+                    let walk1 =
+                        opts.boarding_overhead_min + walk_minutes(distance_m(origin, board_stop.point), opts);
                     let walk2 =
                         walk_minutes(distance_m(alight_stop.point, destination), opts);
 
@@ -281,15 +299,23 @@ fn find_direct(
                     let (ride, ride_spread) =
                         ride_minutes_with_vehicle(board_m, alight_m, vehicle.as_ref(), &model);
 
-                    let total = opts.boarding_overhead_min + walk1 + wait + ride + walk2;
+                    // walk1 已经包含出门准备，不再重复加 boarding_overhead_min
+                    let total = walk1 + wait + ride + walk2;
+
+                    // 时间轴从**真实出发时刻**起算，而不是永远从 0 开始。
+                    // 少了这一步，用户在"最晚 20:00 出发"下会看到
+                    // 出发时间比到达时间还晚（见 PlanOptions::depart_offset_min）。
+                    let t0 = opts.depart_offset_min;
+                    // 收口时刻：最后一段步行的终点，同时也是 arrive_offset_min
+                    let t_end = t0 + walk1 + wait + ride + walk2;
 
                     out.push(JourneyOption {
                         total_minutes: total,
                         walk_meters: distance_m(origin, board_stop.point)
                             + distance_m(alight_stop.point, destination),
                         transfers: 0,
-                        latest_depart_offset_min: 0.0,
-                        arrive_offset_min: total,
+                        latest_depart_offset_min: t0,
+                        arrive_offset_min: t_end,
                         legs: vec![
                             JourneyLeg {
                                 kind: LegKind::Walk,
@@ -302,8 +328,8 @@ fn find_direct(
                                 board_stop_no: None,
                                 alight_stop_no: None,
                                 stop_count: None,
-                                start_offset_min: 0.0,
-                                end_offset_min: walk1,
+                                start_offset_min: t0,
+                                end_offset_min: t0 + walk1,
                                 vehicle: None,
                                 confidence: PositionConfidence::Live,
                             },
@@ -318,8 +344,8 @@ fn find_direct(
                                 board_stop_no: Some(detail.stops[bi].stop_no),
                                 alight_stop_no: None,
                                 stop_count: None,
-                                start_offset_min: walk1,
-                                end_offset_min: walk1 + wait,
+                                start_offset_min: t0 + walk1,
+                                end_offset_min: t0 + walk1 + wait,
                                 vehicle: vehicle.clone(),
                                 confidence: conf,
                             },
@@ -334,8 +360,8 @@ fn find_direct(
                                 board_stop_no: Some(detail.stops[bi].stop_no),
                                 alight_stop_no: Some(detail.stops[ai].stop_no),
                                 stop_count: Some(ai as i64 - bi as i64),
-                                start_offset_min: walk1 + wait,
-                                end_offset_min: walk1 + wait + ride,
+                                start_offset_min: t0 + walk1 + wait,
+                                end_offset_min: t0 + walk1 + wait + ride,
                                 vehicle,
                                 confidence: conf,
                             },
@@ -350,8 +376,8 @@ fn find_direct(
                                 board_stop_no: None,
                                 alight_stop_no: None,
                                 stop_count: None,
-                                start_offset_min: walk1 + wait + ride,
-                                end_offset_min: total,
+                                start_offset_min: t0 + walk1 + wait + ride,
+                                end_offset_min: t0 + total,
                                 vehicle: None,
                                 confidence: PositionConfidence::Live,
                             },
@@ -443,7 +469,9 @@ fn find_one_transfer(
                         let b2_m = l2.cumulative_meters[ti];
                         let a2_m = l2.cumulative_meters[ai];
 
-                        let walk1 = walk_minutes(distance_m(origin, board.point), opts);
+                        // 首段步行同样包含出门准备时间（与直达保持一致的语义）
+                        let walk1 = opts.boarding_overhead_min
+                            + walk_minutes(distance_m(origin, board.point), opts);
                         let walk2 =
                             walk_minutes(distance_m(alight.point, destination), opts);
 
@@ -469,8 +497,8 @@ fn find_one_transfer(
                         let (ride2, rsp2) =
                             ride_minutes_with_vehicle(b2_m, a2_m, veh2.as_ref(), &model);
 
-                        let total = opts.boarding_overhead_min
-                            + walk1
+                        // walk1 已含出门准备，不再重复加 boarding_overhead_min
+                        let total = walk1
                             + wait1
                             + ride1
                             + opts.transfer_buffer_min
@@ -478,13 +506,17 @@ fn find_one_transfer(
                             + ride2
                             + walk2;
 
-                        let t0 = 0.0;
+                        let t0 = opts.depart_offset_min;
                         let t1 = t0 + walk1;
                         let t2 = t1 + wait1;
                         let t3 = t2 + ride1;
                         let t4 = t3 + opts.transfer_buffer_min;
                         let t5 = t4 + wait2;
                         let t6 = t5 + ride2;
+                        // 收口时刻：最后一段步行的终点，同时也是 arrive_offset_min。
+                        // 用同一个值而不是各自算 `t0 + total`，避免两者因
+                        // boarding_overhead_min 之类的小项对不齐。
+                        let t_end = t6 + walk2;
 
                         let transfer_stop_name = s1.stop_name.clone();
 
@@ -493,8 +525,9 @@ fn find_one_transfer(
                             walk_meters: distance_m(origin, board.point)
                                 + distance_m(alight.point, destination),
                             transfers: 1,
-                            latest_depart_offset_min: 0.0,
-                            arrive_offset_min: total,
+                            // 同上：时间轴以真实出发时刻为基准
+                            latest_depart_offset_min: t0,
+                            arrive_offset_min: t_end,
                             legs: vec![
                                 walk_leg("当前位置", &board.stop_name, walk1,
                                          distance_m(origin, board.point), t0, t1),
@@ -519,7 +552,7 @@ fn find_one_transfer(
                                 wait_leg(l2, ti, wait2, veh2.clone(), conf2, t4, t5),
                                 bus_leg(l2, ti, ai, ride2, veh2, conf2, t5, t6),
                                 walk_leg(&alight.stop_name, "目的地", walk2,
-                                         distance_m(alight.point, destination), t6, total),
+                                         distance_m(alight.point, destination), t6, t6 + walk2),
                             ],
                             tags: vec![],
                             score: total + sp1 + rsp1 + sp2 + rsp2 + opts.transfer_buffer_min,
@@ -964,7 +997,7 @@ mod tests {
             );
         }
         assert!(
-            (best.legs.last().unwrap().end_offset_min - best.total_minutes).abs() < 1e-6,
+            (best.legs.last().unwrap().end_offset_min - best.arrive_offset_min).abs() < 1e-6,
             "最后一段的结束时刻必须等于总耗时"
         );
     }
@@ -1014,7 +1047,7 @@ mod tests {
                 "换乘方案的时间轴必须连续"
             );
         }
-        assert!((t.legs.last().unwrap().end_offset_min - t.total_minutes).abs() < 1e-6);
+        assert!((t.legs.last().unwrap().end_offset_min - t.arrive_offset_min).abs() < 1e-6);
     }
 
     /// 换乘站恰为下车线路的终点站 → 应当被拒绝

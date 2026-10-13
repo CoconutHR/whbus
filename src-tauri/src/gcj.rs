@@ -30,6 +30,16 @@ pub struct LngLat {
     pub lat: f64,
 }
 
+/// 供日志输出：`114.295109,30.492370` 这样的紧凑形式。
+///
+/// 6 位小数对城市尺度足够（约 0.1 米），且方便直接粘进高德坐标拾取器
+/// 复核 —— 排查"周边查不到站点"这类问题时经常要这么做。
+impl std::fmt::Display for LngLat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:.6},{:.6}", self.lng, self.lat)
+    }
+}
+
 impl LngLat {
     pub const fn new(lng: f64, lat: f64) -> Self {
         Self { lng, lat }

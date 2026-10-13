@@ -10,12 +10,32 @@ import {
   IconRefresh,
   IconStar,
 } from "../components/icons";
-import { getAmapKeyStatus, getApiState, setAmapKey, type AmapKeyStatus } from "../lib/api";
+import { clearLogs, exportLogs, getAmapKeyStatus, getApiState, getLogs, setAmapKey, type AmapKeyStatus } from "../lib/api";
+import { checkForUpdate, openUrl, type UpdateInfo } from "../lib/update";
 import { useAppStore } from "../lib/store";
 import { useLocation } from "../lib/location";
-import type { ApiState } from "../lib/types";
+import type { ApiState, LogEntry } from "../lib/types";
 import type { ThemeMode } from "../App";
 import "./SettingsScreen.css";
+
+/**
+ * 已安装版本号。
+ *
+ * 从 Tauri 运行时读取（值来自 `tauri.conf.json`，由 CI 在构建前注入），
+ * 而**不是**硬编码 —— 硬编码的话每次发版都要记得改，迟早会忘，
+ * 而版本号错了会让"检查更新"给出完全错误的结论。
+ *
+ * 读取前先用 package.json 的版本兜底，避免闪烁成空字符串。
+ */
+export const APP_VERSION_FALLBACK = "0.1.0";
+
+/** 毫秒时间戳 → `HH:MM:SS`（日志行里不需要日期） */
+function formatClockOf(ms: number): string {
+  const d = new Date(ms);
+  return [d.getHours(), d.getMinutes(), d.getSeconds()]
+    .map((n) => String(n).padStart(2, "0"))
+    .join(":");
+}
 
 export function SettingsScreen({
   theme,
@@ -33,6 +53,70 @@ export function SettingsScreen({
   const [amapKeyInput, setAmapKeyInput] = useState("");
   const [amapSaving, setAmapSaving] = useState(false);
   const [amapErr, setAmapErr] = useState<string | null>(null);
+
+  // ---- 日志 ----
+  const [logs, setLogs] = useState<LogEntry[] | null>(null);
+  const [logFilter, setLogFilter] = useState<"all" | "warn">("warn");
+  const [exportMsg, setExportMsg] = useState<string | null>(null);
+
+  // ---- 版本与更新检查 ----
+  const [version, setVersion] = useState(APP_VERSION_FALLBACK);
+  const [checking, setChecking] = useState(false);
+  const [updateMsg, setUpdateMsg] = useState<string | null>(null);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+
+  /**
+   * 读取已安装版本。
+   *
+   * 先试 Tauri 运行时（权威值，CI 注入），失败再退到 package.json 的编译期常量。
+   * 静默失败：读不到版本不该拦住任何操作。
+   */
+  useEffect(() => {
+    void (async () => {
+      try {
+        const { getVersion } = await import("@tauri-apps/api/app");
+        setVersion(await getVersion());
+      } catch {
+        // 浏览器预览模式或旧版本：保持兜底值
+      }
+    })();
+  }, []);
+
+  const loadLogs = async () => {
+    try {
+      setLogs(await getLogs(400));
+    } catch (e) {
+      setExportMsg(`读取日志失败：${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
+  const doExport = async () => {
+    try {
+      const path = await exportLogs();
+      setExportMsg(`已导出到 ${path}`);
+    } catch (e) {
+      setExportMsg(`导出失败：${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
+  const checkUpdate = async () => {
+    setChecking(true);
+    setUpdateMsg(null);
+    setUpdateInfo(null);
+    try {
+      const r = await checkForUpdate(version);
+      if (r.kind === "latest") {
+        setUpdateMsg(`已是最新版本（${version}）`);
+      } else if (r.kind === "available") {
+        setUpdateMsg(`发现新版本 ${r.info.version}（当前 ${version}）`);
+        setUpdateInfo(r.info);
+      } else {
+        setUpdateMsg(r.message);
+      }
+    } finally {
+      setChecking(false);
+    }
+  };
 
   const loadApi = async () => {
     try {
@@ -350,7 +434,7 @@ export function SettingsScreen({
         <Card>
           <div className="kv">
             <Row label="版本">
-              <span className="tnum">0.1.0</span>
+              <span className="tnum">{version}</span>
             </Row>
             <Row label="数据来源">
               <span className="t-cap t-2">武汉公交 gps-resapi（第三方）</span>
@@ -365,6 +449,127 @@ export function SettingsScreen({
               车辆位置可能有延迟，请以实际到站情况为准。
             </Notice>
           </div>
+
+          {/* 更新检查：不自动装，只把用户送到 Release 页面 */}
+          <div style={{ marginTop: "var(--space-3)" }}>
+            <Button
+              block
+              variant="ghost"
+              onClick={() => void checkUpdate()}
+              disabled={checking}
+            >
+              {checking ? "检查中…" : "检查更新"}
+            </Button>
+            {updateMsg ? (
+              <div className="t-cap t-3" style={{ marginTop: "var(--space-2)" }}>
+                {updateMsg}
+              </div>
+            ) : null}
+            {updateInfo ? (
+              <div style={{ marginTop: "var(--space-2)" }}>
+                <Button
+                  block
+                  variant="primary"
+                  onClick={() =>
+                    void openUrl(
+                      `https://github.com/CoconutHR/whbus/releases/latest/download/${updateInfo.asset}`,
+                    )
+                  }
+                >
+                  下载 {updateInfo.version}
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        </Card>
+
+        {/* ---------- 日志 ---------- */}
+        <SectionTitle
+          action={
+            <span className="row gap-2">
+              <button
+                type="button"
+                className="settings__link"
+                onClick={() => void loadLogs()}
+              >
+                刷新
+              </button>
+              <button
+                type="button"
+                className="settings__link"
+                onClick={() => void doExport()}
+              >
+                导出
+              </button>
+              <button
+                type="button"
+                className="settings__link"
+                onClick={() => {
+                  void clearLogs().then(() => setLogs([]));
+                }}
+              >
+                清空
+              </button>
+            </span>
+          }
+        >
+          运行日志
+        </SectionTitle>
+        <Card>
+          <div className="t-cap t-3">
+            遇到「暂时给不出方案」时，这里能看出卡在哪一步：
+            周边站点数、候选线路、站点表是否拉到、有无共同线路。
+            导出后可以直接把文件发给我。
+          </div>
+
+          {logs === null ? (
+            <div style={{ marginTop: "var(--space-3)" }}>
+              <Button block variant="ghost" onClick={() => void loadLogs()}>
+                载入日志
+              </Button>
+            </div>
+          ) : logs.length === 0 ? (
+            <div className="t-cap t-3" style={{ marginTop: "var(--space-3)" }}>
+              还没有日志。
+            </div>
+          ) : (
+            <>
+              <div className="settings__logbar">
+                <Segmented
+                  options={[
+                    { value: "all", label: "全部" },
+                    { value: "warn", label: "只看问题" },
+                  ]}
+                  value={logFilter}
+                  onChange={(v) => setLogFilter(v as "all" | "warn")}
+                />
+              </div>
+              <div className="settings__logs">
+                {logs
+                  .filter((l) =>
+                    logFilter === "all"
+                      ? true
+                      : l.level === "WARN" || l.level === "ERROR",
+                  )
+                  .slice(-120)
+                  .map((l, i) => (
+                    <div key={`${l.ts}-${i}`} className="settings__logline">
+                      <span className={`settings__level is-${l.level.toLowerCase()}`}>
+                        {l.level}
+                      </span>
+                      <span className="tnum settings__logtime">{formatClockOf(l.ts)}</span>
+                      <span className="settings__logmsg">{l.message}</span>
+                    </div>
+                  ))}
+              </div>
+            </>
+          )}
+
+          {exportMsg ? (
+            <div className="t-cap t-3" style={{ marginTop: "var(--space-2)" }}>
+              {exportMsg}
+            </div>
+          ) : null}
         </Card>
       </section>
 

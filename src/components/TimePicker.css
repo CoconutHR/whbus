@@ -1,0 +1,165 @@
+/*
+  时间选择器：主题化的底部抽屉。
+
+  替代 `<input type="time">` —— 后者在安卓上会拉起系统轮盘，
+  配色与圆角都与 App 脱节，且无法用 CSS 覆盖。
+*/
+
+.timepick__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px var(--space-3);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: var(--t-label-size);
+  font-weight: 600;
+  min-height: 36px;
+  flex-shrink: 0;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+/* 已设置时刻时用品牌色标出，一眼能看出"这里不是默认值" */
+.timepick__trigger.is-set {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.timepick__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: var(--glass-scrim);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: flex-end;
+  /* 抽屉从底部升起，符合单手操作习惯 */
+  animation: timepick-fade var(--dur-fast) var(--ease-out);
+}
+
+.timepick__sheet {
+  width: 100%;
+  max-height: 78vh;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  background: var(--surface);
+  /*
+    顶部圆角比卡片大一点（24px），底部贴边不圆角。
+    卡片是 18px —— 抽屉是"更高一层"的容器，圆角略大才显得层级正确。
+  */
+  border-radius: 24px 24px 0 0;
+  border-top: 1px solid var(--border);
+  animation: timepick-rise var(--dur-base) var(--ease-out);
+}
+
+@keyframes timepick-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes timepick-rise {
+  from {
+    transform: translateY(14px);
+    opacity: 0.6;
+  }
+}
+
+.timepick__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.timepick__close {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  border-radius: var(--r-sm);
+  color: var(--text-3);
+}
+
+/* 触摸热区扩到 48px，视觉尺寸不变 */
+.timepick__close::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+}
+
+.timepick__quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.timepick__chip {
+  padding: 7px var(--space-3);
+  min-height: 36px;
+  border-radius: var(--r-full);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: var(--t-label-size);
+  font-weight: 600;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+.timepick__chip.is-on {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: var(--brand-fg);
+}
+
+.timepick__grid {
+  display: grid;
+  /* 4 列在 360-430px 宽度下都不会挤：单元格最小约 68px */
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+  overflow-y: auto;
+  /* 限制高度让抽屉不占满屏，同时保证能滚动 */
+  max-height: 44vh;
+  padding-bottom: var(--space-1);
+  -webkit-overflow-scrolling: touch;
+}
+
+.timepick__cell {
+  padding: 9px 0;
+  min-height: 40px;
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: var(--t-label-size);
+  font-weight: 500;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+.timepick__cell.is-on {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-weight: 700;
+}
+
+.timepick__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}

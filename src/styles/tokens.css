@@ -152,6 +152,11 @@
   */
 
   /* 毛玻璃 */
+  /* 等宽字体：日志、坐标这类需要对齐的文本用。
+     不引外部字体，直接用系统等宽族。 */
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+
   --glass-bg: rgba(255, 255, 255, 0.72);
   --glass-border: rgba(255, 255, 255, 0.6);
   --glass-scrim: rgba(15, 17, 21, 0.45);

@@ -11,11 +11,11 @@
   margin-bottom: var(--space-2);
 }
 
-.lines__search:focus-within {
-  border-color: var(--brand);
-  box-shadow: 0 0 0 3px var(--brand-soft);
-}
-
+/*
+  聚焦表现统一由 global.css 的 `input:focus` 提供。
+  这里曾经也画一个同样大小的环，两层错开几像素 ——
+  看起来就是"焦点圈位置不对"。包裹层不再参与聚焦视觉。
+*/
 .lines__search-icon {
   color: var(--text-3);
   flex-shrink: 0;

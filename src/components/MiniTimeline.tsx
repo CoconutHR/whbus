@@ -55,21 +55,40 @@ export function MiniTimeline({
   onStopClick?: (stopNo: number) => void;
   className?: string;
 }) {
-  const clipId = useId().replace(/:/g, "");
+  // useId 给 SVG 内的 marker 生成唯一 id，避免同页多个时间轴互相覆盖
+  const markerId = useId().replace(/:/g, "");
+
   const w = 320;
   const h = variant === "detail" ? 34 : 26;
-  const pad = 8;
-  const usable = w - pad * 2;
+  const pad = 10;
+  const rail = w - pad * 2;
   const total = totalMeters > 0 ? totalMeters : 1;
-
-  const x = (m: number) => pad + (Math.max(0, Math.min(m, total)) / total) * usable;
   const y = h / 2;
+
+  const x = (m: number) => pad + (Math.max(0, Math.min(m, total)) / total) * rail;
 
   // 每条线路最多标 12 个站点刻度，避免小屏糊成一片
   const step = Math.max(1, Math.ceil(stops.length / 12));
 
   return (
     <div className={cx("timeline", className)}>
+      {/*
+        渲染要点（这几条都是修过 bug 的，别改回去）：
+
+        1. `vector-effect="non-scaling-stroke"` 是必需的。
+           viewBox 宽固定 320，而实际渲染宽度随卡片变化（约 340-380px）；
+           配合 preserveAspectRatio="none" 会产生**非等比缩放**，
+           把描边横向拉粗、把圆点拉成椭圆 —— 看上去就是"一段一段的短横线"。
+           加上这个属性后描边宽度不再随缩放变化。
+
+        2. 站点刻度改为 r=2 + 细边（1.25）。
+           早期是 r=2.6 + 1.6 描边，在 26px 高的紧凑模式里
+           圆点会被描边吃掉大半，糊成一串短横。
+
+        3. 车辆点带一圈底色，压在轨道上也看得清。
+
+        4. 轨道末端加箭头，明确"往哪个方向开" —— 光一条横线看不出方向。
+      */}
       <svg
         viewBox={`0 0 ${w} ${h}`}
         className="timeline__svg"
@@ -77,124 +96,117 @@ export function MiniTimeline({
         aria-hidden
       >
         <defs>
-          <clipPath id={`clip-${clipId}`}>
-            <rect x="0" y="0" width={w} height={h} />
-          </clipPath>
+          <marker
+            id={`arrow-${markerId}`}
+            viewBox="0 0 6 6"
+            refX="5"
+            refY="3"
+            markerWidth="5"
+            markerHeight="5"
+            orient="auto"
+          >
+            <path d="M0.5 1 L5 3 L0.5 5 z" fill="var(--text-3)" />
+          </marker>
         </defs>
 
-        <g clipPath={`url(#clip-${clipId})`}>
-          {/* 背景轨：整条线路的"未驶过"状态 */}
-          <line
-            x1={pad}
-            y1={y}
-            x2={pad + usable}
-            y2={y}
-            stroke="var(--border-strong)"
-            strokeWidth={2.5}
-            strokeLinecap="round"
-          />
+        {/* ---- 第 1 层：整条线路的底轨 ---- */}
+        <line
+          x1={pad}
+          y1={y}
+          x2={pad + rail}
+          y2={y}
+          stroke="var(--border-strong)"
+          strokeWidth={3}
+          strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
+          markerEnd={`url(#arrow-${markerId})`}
+        />
 
-          {/* 站点刻度 */}
-          {stops
-            .filter((_, i) => i % step === 0)
-            .map((s) => (
-              <circle
-                key={s.stopNo}
-                cx={x(s.at)}
-                cy={y}
-                r={variant === "detail" ? 3.2 : 2.6}
-                fill="var(--surface)"
-                stroke="var(--border-strong)"
-                strokeWidth={1.6}
-              />
-            ))}
-
-          {/* 用户位置：竖向刻度线，比圆点更醒目且不与车辆混淆 */}
-          {userAt != null ? (
-            <line
-              x1={x(userAt)}
-              y1={y - (variant === "detail" ? 11 : 8)}
-              x2={x(userAt)}
-              y2={y + (variant === "detail" ? 11 : 8)}
-              stroke="var(--brand)"
-              strokeWidth={2}
-              strokeLinecap="round"
-              opacity={0.85}
+        {/* ---- 第 2 层：站点刻度 ---- */}
+        {stops
+          .filter((_, i) => i % step === 0)
+          .map((s) => (
+            <circle
+              key={s.stopNo}
+              cx={x(s.at)}
+              cy={y}
+              r={2}
+              fill="var(--surface)"
+              stroke="var(--border-strong)"
+              strokeWidth={1.25}
+              vectorEffect="non-scaling-stroke"
             />
-          ) : null}
+          ))}
 
-          {/* 车辆 */}
-          {vehicles.map((v, i) => {
-            const vx = x(v.along);
-            const live = v.confidence === "live" || v.confidence === "delayed";
-            const inferred = v.confidence === "inferred";
+        {/* ---- 第 3 层：用户位置（竖向刻度，不与车辆混淆）---- */}
+        {userAt != null ? (
+          <line
+            x1={x(userAt)}
+            y1={y - (variant === "detail" ? 10 : 7)}
+            x2={x(userAt)}
+            y2={y + (variant === "detail" ? 10 : 7)}
+            stroke="var(--brand)"
+            strokeWidth={2}
+            strokeLinecap="round"
+            vectorEffect="non-scaling-stroke"
+          />
+        ) : null}
 
-            // 已驶过段：从起点到车辆，实线不透明（历史是确定的）
-            const passed = (
+        {/* ---- 第 4 层：车辆 ---- */}
+        {vehicles.map((v, i) => {
+          const vx = x(v.along);
+          const live = v.confidence === "live" || v.confidence === "delayed";
+          const inferred = v.confidence === "inferred";
+          const color = live
+            ? "var(--pos-live-color)"
+            : inferred
+              ? "var(--pos-inferred-color)"
+              : "var(--pos-stale-color)";
+
+          return (
+            <g key={`v-${i}`}>
+              {/* 已驶过段：从起点到车辆，颜色随可信度 */}
               <line
-                key={`p-${i}`}
                 x1={pad}
                 y1={y}
                 x2={vx}
                 y2={y}
-                stroke={
-                  live ? "var(--pos-live-color)" : inferred ? "var(--pos-inferred-color)" : "var(--pos-stale-color)"
-                }
-                strokeWidth={2.5}
+                stroke={color}
+                strokeWidth={3}
                 strokeLinecap="round"
                 opacity={live ? 1 : inferred ? 0.75 : 0.5}
+                vectorEffect="non-scaling-stroke"
               />
-            );
 
-            return (
-              <g key={`v-${i}`}>
-                {passed}
-
-                {/* 车辆点 */}
-                {live ? (
-                  <>
-                    <circle
-                      cx={vx}
-                      cy={y}
-                      r={4}
-                      fill="var(--pos-live-color)"
-                      className="timeline__pulse"
-                    />
-                    <circle
-                      cx={vx}
-                      cy={y}
-                      r={4.6}
-                      fill="var(--surface)"
-                      stroke="var(--pos-live-color)"
-                      strokeWidth={2.4}
-                    />
-                  </>
-                ) : (
-                  /* 推测位置：虚线圆环 + 中心实心小点 —— 形状本身就传达不确定 */
-                  <>
-                    <circle
-                      cx={vx}
-                      cy={y}
-                      r={5}
-                      fill="var(--surface)"
-                      stroke={inferred ? "var(--pos-inferred-color)" : "var(--pos-stale-color)"}
-                      strokeWidth={2}
-                      strokeDasharray={inferred ? "3 2.6" : "2 3"}
-                      opacity={inferred ? 0.9 : 0.6}
-                    />
-                    <circle
-                      cx={vx}
-                      cy={y}
-                      r={1.6}
-                      fill={inferred ? "var(--pos-inferred-color)" : "var(--pos-stale-color)"}
-                      opacity={inferred ? 0.9 : 0.6}
-                    />
-                  </>
-                )}
-              </g>
-            );
-          })}
-        </g>
+              {live ? (
+                <>
+                  {/* 脉冲光环：只对真实位置显示 */}
+                  <circle cx={vx} cy={y} r={4} fill={color} className="timeline__pulse" />
+                  {/* 底色外圈，保证压在轨道上也看得清 */}
+                  <circle cx={vx} cy={y} r={5} fill="var(--surface)" />
+                  <circle cx={vx} cy={y} r={3.4} fill={color} />
+                </>
+              ) : (
+                <>
+                  {/* 推测位置：虚线圆环 + 中心点，**形状**本身就传达不确定 */}
+                  <circle cx={vx} cy={y} r={5} fill="var(--surface)" />
+                  <circle
+                    cx={vx}
+                    cy={y}
+                    r={3.6}
+                    fill="none"
+                    stroke={color}
+                    strokeWidth={1.75}
+                    strokeDasharray={inferred ? "3 2.4" : "2 2.8"}
+                    opacity={inferred ? 0.9 : 0.6}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <circle cx={vx} cy={y} r={1.3} fill={color} opacity={inferred ? 0.9 : 0.6} />
+                </>
+              )}
+            </g>
+          );
+        })}
       </svg>
 
       {/* 站点点击热区（详情模式才可交互） */}

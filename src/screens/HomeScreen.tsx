@@ -137,15 +137,21 @@ export function HomeScreen({ onGoToPlan }: { onGoToPlan?: () => void }) {
             onAccept={() => {
               if (!plan.best) return;
               // 采纳 → 进入追踪模式：Tab 栏上方会出现常驻细条，
-              // 避免用户"采纳完就不知道下一步看哪"
+              // 避免用户"采纳完就不知道下一步看哪"。
+              //
+              // 必须从**乘车段**里取 lineId 与线路号：只存线路号的话，
+              // 追踪条点开时无法打开详情页（LineDetailView 要的是带方向的 id）。
+              const lines = plan.best.legs
+                .filter((l) => l.kind === "bus" && l.lineId && l.lineName)
+                .map((l) => ({ id: l.lineId as string, name: l.lineName as string }));
+              if (lines.length === 0) return;
+
               setTracking({
                 label: context.label,
                 toLabel: context.label === "回家" ? "家" : "公司",
                 arriveOffsetMin: plan.best.arriveOffsetMin,
                 acceptedAt: Date.now(),
-                lineNames: plan.best.legs
-                  .filter((l) => l.kind === "bus" && l.lineName)
-                  .map((l) => l.lineName as string),
+                lines,
               });
               void haptic("light");
             }}

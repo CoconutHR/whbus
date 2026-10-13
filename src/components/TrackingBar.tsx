@@ -19,7 +19,7 @@ import "./TrackingBar.css";
  * 放在 Tab 栏之上而不是之下，是因为它属于"当前会话状态"，
  * 优先级高于"切换页面"；同时它不能盖住 Tab 栏，否则导航就废了。
  */
-export function TrackingBar({ onOpen }: { onOpen?: (lineName: string) => void }) {
+export function TrackingBar({ onOpen }: { onOpen?: (lineId: string) => void }) {
   const { tracking, setTracking } = useAppStore();
   const [, forceTick] = useState(0);
 
@@ -42,6 +42,8 @@ export function TrackingBar({ onOpen }: { onOpen?: (lineName: string) => void })
   // 超过预计到达时间 5 分钟就认为结束了，避免出现"还剩 -12 分钟"
   const finished = remainMin < -5;
 
+  const firstLine = tracking.lines[0];
+
   return (
     <div className="trackbar glass" role="status" aria-live="polite">
       <span className="trackbar__icon" aria-hidden>
@@ -51,10 +53,10 @@ export function TrackingBar({ onOpen }: { onOpen?: (lineName: string) => void })
       <button
         type="button"
         className="trackbar__body"
-        onClick={() => {
-          const first = tracking.lineNames[0];
-          if (first && onOpen) onOpen(first);
-        }}
+        // 直接打开**该方向**的线路详情。
+        // 早期这里只切到「线路」Tab 而没有打开任何详情页，
+        // 用户看到的就是一片空白（而且当时连 lineId 都没存）。
+        onClick={() => firstLine && onOpen?.(firstLine.id)}
       >
         <span className="trackbar__text">
           <span className="t-label">
@@ -67,24 +69,22 @@ export function TrackingBar({ onOpen }: { onOpen?: (lineName: string) => void })
           </span>
         </span>
 
-        {tracking.lineNames.length > 0 ? (
+        {tracking.lines.length > 0 ? (
           <span className="trackbar__lines">
-            {tracking.lineNames.map((n) => (
-              <span key={n} className="line-badge">
+            {tracking.lines.map((l) => (
+              <span key={l.id} className="line-badge">
                 <span
                   className="line-badge__dot"
-                  style={{ background: lineColorVar(n) }}
+                  style={{ background: lineColorVar(l.name) }}
                   aria-hidden
                 />
-                {n}
+                {l.name}
               </span>
             ))}
           </span>
         ) : null}
 
-        {onOpen && tracking.lineNames.length > 0 ? (
-          <IconChevron size={14} className="t-3" />
-        ) : null}
+        {onOpen && firstLine ? <IconChevron size={14} className="t-3" /> : null}
       </button>
 
       <button

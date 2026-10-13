@@ -230,3 +230,20 @@ export interface SavedPlace {
   /** 离家/公司最近的站点（由 nearBy 推断） */
   nearestStops?: NearbyStop[];
 }
+
+/**
+ * 一条应用日志。
+ *
+ * 用于排查"暂时给不出方案"这类问题 —— 后端在规划的关键分支上
+ * 都会写日志（候选线路数、站点表是否拉到、有无共同线路等），
+ * 设置页可以直接查看与导出。
+ */
+export interface LogEntry {
+  /** 毫秒时间戳 */
+  ts: number;
+  /** ERROR / WARN / INFO / DEBUG / TRACE */
+  level: string;
+  /** 模块，如 whbus_lib::commands */
+  target: string;
+  message: string;
+}

@@ -187,6 +187,14 @@ impl Api {
     }
 
     /// 取累计请求统计 `(请求数, 总耗时毫秒)`
+    /// 底层 HTTP 客户端。
+    ///
+    /// 给非公交接口的请求用（如 GitHub Release 检查）——
+    /// 这类请求不该走公交接口的限流器，否则会互相干扰。
+    pub fn http(&self) -> &reqwest::Client {
+        &self.http
+    }
+
     pub fn stats(&self) -> (u64, u64) {
         let (n, micros) = self.stats.snapshot();
         (n, micros / 1000)

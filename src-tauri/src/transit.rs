@@ -75,9 +75,30 @@ pub fn local_now_stamp() -> String {
     )
 }
 
+/// 把毫秒时间戳格式化成可读的本地时间 `YYYY-MM-DD HH:MM:SS.mmm`。
+///
+/// 供日志模块使用。复用本模块已有的民用日历换算，避免为此引入 chrono
+/// （为一个时间戳加一个依赖不划算）。
+///
+/// 注：本 App 只服务武汉公交，时刻统一按北京时间理解，
+/// 因此这里直接对 UTC 秒做换算而不做时区偏移 —— 与 `local_now_stamp`
+/// 的既有约定一致（安卓设备在中国境内，两者等价）。
+pub fn format_local_ms(ms: i64) -> String {
+    let secs = ms.div_euclid(1000);
+    let millis = ms.rem_euclid(1000);
+    let days = secs.div_euclid(86_400);
+    let rem = secs.rem_euclid(86_400);
+    let (y, m, d) = civil_from_days(days);
+    format!(
+        "{y:04}-{m:02}-{d:02} {:02}:{:02}:{:02}.{millis:03}",
+        rem / 3600,
+        (rem % 3600) / 60,
+        rem % 60
+    )
+}
+
 /// `days_from_civil` 的逆运算
-fn civil_from_days(z: i64) -> (i32, u32, u32) {
-    let z = z + 719_468;
+fn civil_from_days(z: i64) -> (i32, u32, u32) {    let z = z + 719_468;
     let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
     let doe = z - era * 146_097;
     let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;

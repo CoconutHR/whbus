@@ -136,6 +136,13 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
+      # 版本号必须在构建前写进 tauri.conf.json（进 APK 的 manifest）。
+      # 滚动发布的 Release tag 是 "latest"，tag 名解析成数字是 0，
+      # 于是"检查更新"永远显示已是最新 —— 功能会形同虚设。
+      # 脚本按 tag 或 0.YYMMDD.<run_number> 生成单调递增的版本号。
+      - name: Inject version
+        run: node scripts/inject-version.mjs
+
       - name: Install Rust stable + Android targets
         uses: dtolnay/rust-toolchain@stable
         with:

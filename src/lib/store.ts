@@ -107,8 +107,16 @@ export interface Tracking {
   /** 相对采纳时刻的预计到达分钟数 */
   arriveOffsetMin: number;
   acceptedAt: number;
-  /** 方案涉及的线路号，用于跳转 */
-  lineNames: string[];
+  /**
+   * 方案涉及的线路。
+   *
+   * ⚠️ 必须同时存 `id`，不能只存线路号。
+   * 早期只存了名字（`lineNames`），点追踪条时只能切到「线路」Tab
+   * 而打不开任何详情页 —— 用户看到的就是一片空白。
+   * 而 `LineDetailView` 需要的是 `420100-687-0` 这种**带方向的 id**，
+   * 光有线路号查不出数据。
+   */
+  lines: Array<{ id: string; name: string }>;
   /** 已到达（用户手动结束或时间已过） */
   done?: boolean;
 }

@@ -1,10 +1,12 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { Button, Card, Notice, SkeletonCard, StateView } from "../components/ui";
 import { PageTitle, Screen, SectionTitle } from "../components/Screen";
 import { JourneyOptionCard } from "../components/JourneyOptionCard";
+import { TimePicker } from "../components/TimePicker";
 import {
   IconClock,
+  IconStop,
   IconHomePin,
   IconInfo,
   IconRoute,
@@ -40,13 +42,22 @@ export function PlanScreen() {
 
   const [swapped, setSwapped] = useState(false);
   const [editing, setEditing] = useState<null | "home" | "work">(null);
-  const [deadline, setDeadline] = useState<string>("");
 
   const [planning, setPlanning] = useState(false);
   const [options, setOptions] = useState<JourneyOption[] | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<number | null>(0);
   const [planTime, setPlanTime] = useState<Date>(new Date());
+
+  /**
+   * 出发时刻（相对现在的分钟数）。null = 现在出发。
+   *
+   * 与 `arriveBefore` 是**两个独立**的概念：
+   * 前者决定时间轴起点，后者是到达约束。
+   */
+  const [departOffset, setDepartOffset] = useState<number | null>(null);
+  /** 最晚到达（相对现在的分钟数）。null = 不限制 */
+  const [arriveBefore, setArriveBefore] = useState<number | null>(null);
 
   const from = swapped ? places.work : places.home;
   const to = swapped ? places.home : places.work;
@@ -65,19 +76,6 @@ export function PlanScreen() {
     });
   };
 
-  /** 距离今天某时刻还有多少分钟 */
-  const deadlineOffset = useMemo(() => {
-    if (!deadline) return null;
-    const [h, m] = deadline.split(":").map(Number);
-    if (h == null || m == null || Number.isNaN(h) || Number.isNaN(m)) return null;
-    const now = new Date();
-    const target = new Date(now);
-    target.setHours(h, m, 0, 0);
-    // 已过今天的该时刻 → 视为明天
-    if (target.getTime() <= now.getTime()) target.setDate(target.getDate() + 1);
-    return Math.round((target.getTime() - now.getTime()) / 60_000);
-  }, [deadline]);
-
   const run = async () => {
     if (!from || !to) return;
     setPlanning(true);
@@ -88,7 +86,12 @@ export function PlanScreen() {
       const r = await planJourney({
         origin: from.point,
         destination: to.point,
-        ...(deadlineOffset != null ? { arriveBeforeMin: deadlineOffset } : {}),
+        // 两个时刻各自传递，后端不再"反推出发"——
+        // 反推是导致"出发晚于到达"的根源
+        ...(departOffset != null && departOffset > 0
+          ? { departOffsetMin: departOffset }
+          : {}),
+        ...(arriveBefore != null ? { arriveBeforeMin: arriveBefore } : {}),
       });
       setOptions(r);
       setExpanded(0);
@@ -201,22 +204,47 @@ export function PlanScreen() {
         </div>
       ) : null}
 
-      {/* ---------- 到达时间约束 ---------- */}
+      {/* ---------- 出发时刻与到达约束 ---------- */}
       {bothSet ? (
         <div style={{ marginTop: "var(--space-3)" }}>
           <Card>
+            {/*
+              两项分开是刻意的：
+              - **出发时刻**决定时间轴从哪里开始，是主交互
+              - **最晚到达**是约束，用来反推"最晚几点得走"
+              早期只有后者，且实现是用 `deadline - 总耗时` 反推出发，
+              却仍把"从现在起算的耗时"当到达时刻 —— 于是出现
+              **出发时间比到达时间还晚**。现在两者各自独立、语义清晰。
+            */}
             <div className="row gap-3">
               <IconClock size={20} className="t-2" />
               <div className="grow">
-                <div className="t-head">最晚到达时间</div>
-                <div className="t-cap t-3">留空则按「现在出发」计算</div>
+                <div className="t-head">出发时间</div>
+                <div className="t-cap t-3">默认现在出发；可预估未来的行程</div>
               </div>
-              <input
-                type="time"
-                className="plan__time"
-                value={deadline}
-                onChange={(e) => setDeadline(e.target.value)}
-                aria-label="最晚到达时间"
+              <TimePicker
+                mode="depart"
+                label="出发时间"
+                placeholder="现在出发"
+                value={departOffset}
+                onChange={setDepartOffset}
+              />
+            </div>
+
+            <div className="plan__divider" />
+
+            <div className="row gap-3">
+              <IconStop size={20} className="t-2" />
+              <div className="grow">
+                <div className="t-head">最晚到达</div>
+                <div className="t-cap t-3">不限制则只按出发时间算</div>
+              </div>
+              <TimePicker
+                mode="arrive"
+                label="最晚到达时间"
+                placeholder="不限制"
+                value={arriveBefore}
+                onChange={setArriveBefore}
               />
             </div>
           </Card>
