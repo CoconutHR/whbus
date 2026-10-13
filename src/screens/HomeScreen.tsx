@@ -14,7 +14,7 @@ import {
   IconWalk,
 } from "../components/icons";
 import { useAppStore, nearPlace } from "../lib/store";
-import { useLocation } from "../lib/location";
+import { sourceLabel, useLocation } from "../lib/location";
 import { useJourneyPlan } from "../lib/journey";
 import type { GeoPoint } from "../lib/types";
 import { formatDistance, nowHHMM } from "../lib/utils";
@@ -78,7 +78,7 @@ export function HomeScreen({ onGoToPlan }: { onGoToPlan?: () => void }) {
             fix ? (
               <span className="row gap-1">
                 <IconLocate size={13} />
-                {fix.simulated ? "模拟位置" : `已定位 · 精度 ${Math.round(fix.accuracy)} 米`}
+                {sourceLabel(fix.source)} · 精度 {Math.round(fix.accuracy)} 米
               </span>
             ) : loading ? (
               "正在定位…"

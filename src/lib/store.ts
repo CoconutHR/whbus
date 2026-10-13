@@ -51,11 +51,25 @@ interface AppStore {
 
   /* ---- 上次定位结果（跨 Tab 共享，避免重复定位）---- */
   lastFix:
-    | (GeoPoint & { accuracy: number; at: number; simulated: boolean })
+    | (GeoPoint & {
+        accuracy: number;
+        at: number;
+        /** 定位来源。必须持久化，否则重新加载后无法如实说明坐标是怎么来的 */
+        source: "plugin" | "webview" | "simulated";
+        /** 用户拒绝了授权 */
+        denied?: boolean;
+      })
     | null;
   lastNearby: NearbyStop[];
   setFix: (
-    fix: (GeoPoint & { accuracy: number; at: number; simulated: boolean }) | null,
+    fix:
+      | (GeoPoint & {
+          accuracy: number;
+          at: number;
+          source: "plugin" | "webview" | "simulated";
+          denied?: boolean;
+        })
+      | null,
     nearby: NearbyStop[],
   ) => void;
 

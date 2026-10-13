@@ -121,8 +121,12 @@ export function SettingsScreen({
                 <Chip tone="brand">GCJ-02</Chip>
               </Row>
               <Row label="来源">
-                {fix.simulated ? (
+                {fix.source === "simulated" ? (
                   <Chip tone="warn">模拟位置</Chip>
+                ) : fix.source === "webview" ? (
+                  <Chip tone="live">
+                    <IconLocate size={12} /> 系统定位（兼容模式）
+                  </Chip>
                 ) : (
                   <Chip tone="live">
                     <IconLocate size={12} /> 系统定位

@@ -5,7 +5,7 @@ import { PageTitle, Screen } from "../components/Screen";
 import { IconInfo, IconLocate, IconSearch, IconWork } from "../components/icons";
 import { getAmapKeyStatus, searchPlace, setAmapKey, type Place } from "../lib/api";
 import { useAppStore } from "../lib/store";
-import { useLocation } from "../lib/location";
+import { sourceLabel, useLocation } from "../lib/location";
 import "./PlaceSearch.css";
 
 /**
@@ -165,7 +165,7 @@ export function PlaceSearch({
               <div className="t-head">用当前位置</div>
               <div className="t-cap t-3">
                 {fix
-                  ? `${fix.lng.toFixed(5)}, ${fix.lat.toFixed(5)}${fix.simulated ? " · 模拟位置" : ""}`
+                  ? `${fix.lng.toFixed(5)}, ${fix.lat.toFixed(5)} · ${sourceLabel(fix.source)}`
                   : "尚未定位"}
               </div>
             </div>

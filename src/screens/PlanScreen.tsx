@@ -60,7 +60,7 @@ export function PlanScreen() {
       label,
       point: { lng: fix.lng, lat: fix.lat },
       source: "gps",
-      ...(fix.simulated ? { address: "模拟位置（桌面开发）" } : {}),
+      ...(fix.source === "simulated" ? { address: "模拟位置（未获取到真实定位）" } : {}),
       nearestStops: nearby.slice(0, 3),
     });
   };
