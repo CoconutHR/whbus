@@ -45,4 +45,10 @@
   line-height: var(--t-cap-line);
   font-weight: var(--t-cap-weight);
   letter-spacing: var(--t-cap-tracking);
+  transition: font-weight var(--dur-fast) var(--ease-out);
+}
+
+/* 激活态不只靠颜色区分：图标描边加粗（见 TabBar.tsx）+ 文字加重 */
+.tabbar__item[aria-selected="true"] .tabbar__label {
+  font-weight: 750;
 }

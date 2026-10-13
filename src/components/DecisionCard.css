@@ -15,6 +15,7 @@
 }
 
 .dc__refresh {
+  position: relative;
   min-height: 28px;
   padding: 0 var(--space-2);
   border-radius: var(--r-xs);
@@ -22,6 +23,13 @@
   color: var(--brand);
   font-size: var(--t-cap-size);
   font-weight: 600;
+}
+
+/* 触摸热区扩到 44px：伪元素向外延伸 8px，视觉尺寸与布局都不变 */
+.dc__refresh::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
 }
 
 /* ---- 到达时刻：视觉主角 ---- */

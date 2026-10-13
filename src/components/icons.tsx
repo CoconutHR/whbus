@@ -19,7 +19,7 @@ const SIZE_PX: Record<IconSize, number> = {
   lg: 24,
 };
 
-interface IconProps extends Omit<SVGProps<SVGSVGElement>, "children"> {
+export interface IconProps extends Omit<SVGProps<SVGSVGElement>, "children"> {
   size?: IconSize | number;
   /** 无障碍标签；不传则视为纯装饰（aria-hidden） */
   label?: string;

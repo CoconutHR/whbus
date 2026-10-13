@@ -242,18 +242,9 @@ export function FreshnessChip({
 /** 关闭按钮（覆盖层用）。评审要求：模态必须有明确的关闭动作 */
 export function CloseButton({ onClick }: { onClick: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label="关闭"
-      style={{
-        width: 36,
-        height: 36,
-        minHeight: 36,
-        borderRadius: "var(--r-sm)",
-        color: "var(--text-3)",
-      }}
-    >
+    // 视觉 36px，`.close-btn::after` 用伪元素把触摸热区扩到 60px ——
+    // 触摸目标要够大，但视觉尺寸与布局不该跟着变大
+    <button type="button" className="close-btn" onClick={onClick} aria-label="关闭">
       <IconClose size={18} />
     </button>
   );

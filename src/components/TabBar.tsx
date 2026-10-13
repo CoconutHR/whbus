@@ -5,7 +5,7 @@ import {
   IconHome,
   IconRoute,
   IconSettings,
-  type IconSize,
+  type IconProps,
 } from "./icons";
 import "./TabBar.css";
 
@@ -14,7 +14,7 @@ export type TabKey = "home" | "plan" | "lines" | "settings";
 interface TabDef {
   key: TabKey;
   label: string;
-  Icon: (p: { size?: IconSize | number }) => React.ReactElement;
+  Icon: (p: IconProps) => React.ReactElement;
 }
 
 /**
@@ -49,7 +49,8 @@ export function TabBar({
             onClick={() => onChange(key)}
           >
             <span className="tabbar__icon">
-              <Icon size={24} />
+              {/* 激活态加粗描边：颜色之外的第二区分维度，不依赖色觉也能分辨 */}
+              <Icon size={24} strokeWidth={selected ? 2.25 : 1.75} />
             </span>
             <span className="tabbar__label">{label}</span>
           </button>

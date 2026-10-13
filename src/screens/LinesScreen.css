@@ -39,6 +39,7 @@
 }
 
 .lines__clear {
+  position: relative;
   width: 28px;
   height: 28px;
   min-height: 28px;
@@ -48,6 +49,13 @@
   font-size: 18px;
   line-height: 1;
   flex-shrink: 0;
+}
+
+/* 触摸热区扩到 44px：伪元素向外延伸 8px，视觉尺寸与布局都不变 */
+.lines__clear::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
 }
 
 /* ---------------------------------------------------------------- 站点结果 */
