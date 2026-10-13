@@ -928,3 +928,71 @@ pub async fn preload_lines(
     log::info!("预加载完成：{loaded} 个方向已进缓存");
     Ok(loaded)
 }
+
+#[cfg(test)]
+mod version_tests {
+    use super::{is_newer, parse_version};
+
+    #[test]
+    fn parses_common_forms() {
+        assert_eq!(parse_version("v1.2.3"), vec![1, 2, 3]);
+        assert_eq!(parse_version("1.2.3"), vec![1, 2, 3]);
+        assert_eq!(parse_version(" v0.261013.21 "), vec![0, 261013, 21]);
+        // 缺段：只解析出已有的部分，比较时按 0 补齐
+        assert_eq!(parse_version("v0.1"), vec![0, 1]);
+        // 预发布后缀在段内被截断
+        assert_eq!(parse_version("v1.2.3-beta.1"), vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn detects_newer_versions() {
+        assert!(is_newer("v0.2.0", "0.1.0"));
+        assert!(is_newer("v0.1.1", "0.1.0"));
+        assert!(is_newer("v1.0.0", "0.9.9"));
+        assert!(is_newer("v0.261014.1", "0.261013.21"));
+    }
+
+    #[test]
+    fn same_or_older_is_not_newer() {
+        assert!(!is_newer("v0.1.0", "0.1.0"));
+        assert!(!is_newer("0.1.0", "v0.1.0"), "v 前缀不该影响判定");
+        // 缺段按 0 补齐，所以 v0.1 与 0.1.0 相等
+        assert!(!is_newer("v0.1", "0.1.0"));
+        assert!(!is_newer("v0.0.9", "0.1.0"));
+    }
+
+    /// 滚动发布用的 `0.YYMMDD.<run>` 必须单调递增，
+    /// 否则"检查更新"会在同一天内的多次构建之间失灵。
+    #[test]
+    fn rolling_version_scheme_is_monotonic() {
+        // 同一天，run_number 递增
+        assert!(is_newer("0.261013.22", "0.261013.21"));
+        // 换天
+        assert!(is_newer("0.261014.1", "0.261013.99"));
+        // 跨月（日期段是 0 填充的，位数固定，比较仍然正确）
+        assert!(is_newer("0.261101.1", "0.261031.99"));
+        // 跨年
+        assert!(is_newer("0.270101.1", "0.261231.99"));
+    }
+
+    /// 主版本号领先时，日期段再小也算是新版本
+    #[test]
+    fn major_version_wins_over_date_segment() {
+        assert!(is_newer("v1.0.0", "0.261231.99"));
+    }
+
+    /// 脏数据不该 panic，也不该被误判成"有新版本"导致用户被引导去装一个空包
+    #[test]
+    fn malformed_input_does_not_panic() {
+        assert!(!is_newer("", "0.1.0"));
+        assert!(!is_newer("abc", "0.1.0"));
+        assert!(!is_newer("v", "0.1.0"));
+        // 空串会被 split('.') 切成一个空段、解析为 [0] ——
+        // 与 0.0.0 等价，所以下面断的是"相等"而不是"更旧"。
+        assert_eq!(parse_version(""), vec![0]);
+        // "v.." 去掉前缀是 ".."，切出三个空段 → 全为 0
+        assert_eq!(parse_version("v.."), vec![0, 0, 0]);
+        // 整串非数字同样退化成 0，不会被当成新版本
+        assert!(!is_newer("abc", "0.0.0"));
+    }
+}
